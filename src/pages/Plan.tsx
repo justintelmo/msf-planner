@@ -260,6 +260,18 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         unlock content like {CONTENT_TEAMS[0]?.content}, live events, and how many unlock events and Dark Dimensions their
         traits fit. A character useful in several places outranks one built for a single mode.
       </p>
+      {snapshot.source === 'live' && (() => {
+        const ids = snapshot.inventory.map((i) => idOf(i.item) ?? '');
+        const ions = ids.filter((id) => id.startsWith('ISO8-TIER-') && id.endsWith('-CURRENCY')).length;
+        const moduleIds = new Set((snapshot.upgrades?.characterXpCosts ?? []).flatMap((w) => w.cost.map((c) => c.item)));
+        const modules = ids.filter((id) => moduleIds.has(id)).length;
+        return (
+          <p className="muted small">
+            From your inventory: {ions} ion types and {modules} training module types.
+            {(!ions || !modules) && ' Press Sync if either is 0; ISO and level steps can’t be checked without them.'}
+          </p>
+        );
+      })()}
       {!snapshot.squads && (
         <p className="muted small">Your saved squads haven’t loaded yet. Press Sync to include them.</p>
       )}

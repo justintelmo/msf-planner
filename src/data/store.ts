@@ -18,7 +18,11 @@ export interface Snapshot {
   squads?: Squads;
   /** Why optional planner data is missing, when a fetch failed. */
   plannerErrors?: string[];
+  /** Bumped when sync starts reading something new, so older caches refresh once. */
+  version?: number;
 }
+
+const SNAPSHOT_VERSION = 2;
 
 export type Mode = 'live' | 'demo' | null;
 
@@ -95,7 +99,10 @@ export async function sync(): Promise<void> {
         msfApi.card(), msfApi.characters(), msfApi.roster(), msfApi.inventory(), msfApi.events(),
         optional('upgrade costs', msfApi.upgrades()), optional('saved squads', msfApi.squads()),
       ]);
-      snapshot = { source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads, plannerErrors };
+      snapshot = {
+        source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads, plannerErrors,
+        version: SNAPSHOT_VERSION,
+      };
     }
     writeJson(localStorage, SNAPSHOT_KEY, snapshot);
     set({ snapshot, loading: false });
@@ -106,8 +113,8 @@ export async function sync(): Promise<void> {
 
 let refreshedOldSnapshot = false;
 
-/** Cached before the planner fields existed (squads, then XP tables). */
-const isStale = (s: Snapshot) => !('plannerErrors' in s) || !s.upgrades?.characterLevelTotalXp;
+/** Cached by an older sync (before squads, XP tables, or per-type inventory). */
+const isStale = (s: Snapshot) => (s.version ?? 0) < SNAPSHOT_VERSION;
 
 /**
  * Loads data once when a mode is active but nothing is cached yet, and refreshes

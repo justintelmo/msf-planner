@@ -26,6 +26,8 @@ const mapValues = <A, B>(o: Record<string, A>, f: (a: A) => B): Record<string, B
 
 /** Keeps each page under the API's 472 kB response limit. */
 const PAGE_SIZE = 100;
+/** The inventory endpoint's itemType filter values. */
+export const INVENTORY_TYPES = ['GEAR', 'ISOITEM', 'SHARD', 'RS', 'COSTUME', 'CONSUMABLE', 'ABILITY_MATERIAL'];
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -68,8 +70,24 @@ export const msfApi = {
   async roster(): Promise<CharacterInstance[]> {
     return (await get<CharacterInstance[]>('/player/v1/roster')).data;
   },
+  /**
+   * Everything in the inventory. The unfiltered call leaves some types out (ions, training
+   * modules), so each item type is read separately and merged by item id.
+   */
   async inventory(): Promise<ItemQuantity[]> {
-    return (await get<ItemQuantity[]>('/player/v1/inventory', { itemFormat: 'id' })).data;
+    const read = (itemType?: string) =>
+      get<ItemQuantity[]>('/player/v1/inventory', { itemFormat: 'id', ...(itemType ? { itemType } : {}) })
+        .then((r) => r.data ?? [])
+        .catch(() => [] as ItemQuantity[]);
+    const lists = await Promise.all([undefined, ...INVENTORY_TYPES].map(read));
+    const merged = new Map<string, ItemQuantity>();
+    for (const entry of lists.flat()) {
+      const id = typeof entry.item === 'string' ? entry.item : entry.item?.id;
+      if (!id) continue;
+      const prev = merged.get(id);
+      if (!prev || (entry.quantity ?? 0) > (prev.quantity ?? 0)) merged.set(id, entry);
+    }
+    return [...merged.values()];
   },
   async events(): Promise<EventInfo[]> {
     return (await get<EventInfo[]>('/player/v1/events', { itemFormat: 'id', pieceInfo: 'none' })).data;
