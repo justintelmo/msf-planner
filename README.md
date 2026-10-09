@@ -16,6 +16,14 @@ Open https://localhost:5173. The dev server uses a self-signed certificate, beca
 
 Click **Try with demo data** to explore without logging in. The demo roster is made up.
 
+## Hosting on GitHub Pages
+
+Every push to `main` builds and deploys to https://justintelmo.github.io/msf-planner/ via `.github/workflows/deploy.yml`. One-time setup:
+
+1. **Settings → Pages:** set Source to **GitHub Actions**.
+2. **Settings → Secrets and variables → Actions:** add the repository secrets `VITE_MSF_CLIENT_ID` and `VITE_MSF_API_KEY`.
+3. **MSF developer portal:** add `https://justintelmo.github.io/msf-planner/callback` as an OAuth2 redirect URL.
+
 ## How it works
 
 - **Login:** OAuth2 Authorization Code with PKCE against Scopely's auth server. It uses a public client, so there is no secret. Tokens live in your browser's localStorage. Refreshes go through `/util/v1/gatedRefresh`, because refresh tokens are single-use. See `src/auth/auth.ts`.
