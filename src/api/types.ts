@@ -40,6 +40,8 @@ export interface CharacterInstance {
   passive?: number;
   power?: number;
   favorite?: boolean;
+  /** Equipped gear slots in the current tier (6 booleans). */
+  gearSlots?: boolean[];
   iso8?: {
     matrix?: string;
     active?: string;
@@ -76,6 +78,8 @@ export interface CharacterFilter {
   gearTier?: number;
   /** Minimum level of the character's active ISO-8 class. */
   iso8ClassLevel?: number;
+  /** Required active ISO-8 class. */
+  iso8Class?: string;
 }
 
 export interface Requirements {
@@ -85,6 +89,11 @@ export interface Requirements {
   specificCharacters?: string[];
   /** A string, or an array of lines on node requirements. */
   description?: string | string[];
+  otherRequirements?: {
+    playerLevel?: number;
+    /** Nodes that must be completed first, e.g. the previous Dark Dimension. */
+    allNodeCompletions?: unknown[];
+  };
 }
 
 export interface Progress {
@@ -190,6 +199,9 @@ export interface NodeCombat {
 }
 
 export interface NodeInfo {
+  rewards?: unknown;
+  firstTimeRewards?: unknown;
+  limitedRewards?: unknown;
   name?: string;
   subName?: string;
   details?: string;
@@ -208,4 +220,18 @@ export interface DarkDimension {
   rays?: string[][];
   startingRoomId?: string;
   rooms?: Record<string, NodeInfo>;
+  completion?: unknown;
+  ddCompletion?: unknown;
+  nodeRewards?: unknown;
+}
+
+export interface EpisodicInfo {
+  id: string;
+  nodeName?: string;
+  name?: string;
+  subName?: string;
+  details?: string;
+  requirements?: Requirements;
+  numChapters?: number;
+  chapters?: Record<string, { requirements?: Requirements; numTiers?: number; tiers?: Record<string, NodeInfo> }>;
 }

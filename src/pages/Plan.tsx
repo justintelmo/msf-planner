@@ -9,6 +9,7 @@ import { buildPlan, modeEffectLabel, type Step } from '../planner/build';
 import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
+import { goalReports, goalTargets, useUnlocks } from '../data/unlocks';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
@@ -98,7 +99,12 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     [owned, snapshot, modeOrder],
   );
   const order = useMemo(() => ranked.map((r) => r.character.info.id), [ranked]);
-  const detailIds = useMemo(() => order.slice(0, DETAIL_LIMIT), [order]);
+  const { catalog, goals } = useUnlocks();
+  const targets = useMemo(
+    () => goalTargets(goalReports(goals, catalog, owned), (id) => names.get(id) ?? id),
+    [goals, catalog, owned, names],
+  );
+  const detailIds = useMemo(() => [...new Set([...Object.keys(targets), ...order])].slice(0, DETAIL_LIMIT), [order, targets]);
   const { details, remaining } = useCharacterDetails(detailIds, snapshot.source === 'live');
 
   const levelCap = Math.max(1, ...owned.map((c) => c.instance?.level ?? 0));
@@ -107,9 +113,9 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildPlan({
       owned, inventory: snapshot.inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES,
-      order, levelCap, gearTiers, modeTags, modeWeights: modeWeights(modeOrder), gold,
+      order, levelCap, gearTiers, modeTags, modeWeights: modeWeights(modeOrder), gold, targets,
     });
-  }, [owned, snapshot, order, levelCap, details, modeOrder, gold]);
+  }, [owned, snapshot, order, levelCap, details, modeOrder, gold, targets]);
   const reasonsOf = useMemo(() => new Map(ranked.map((r) => [r.character.info.id, r])), [ranked]);
 
   const [showAllSteps, setShowAllSteps] = useState(false);
@@ -144,8 +150,16 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </label>
         {remaining > 0 && <span className="muted small">Reading gear and abilities for {remaining} characters…</span>}
       </div>
+      {goals.length > 0 && (
+        <p className="small">
+          <strong>Unlock goals come first:</strong> {goals.map((g) => names.get(g) ?? g).join(', ')}.{' '}
+          {Object.keys(targets).length
+            ? `${Object.keys(targets).length} characters need upgrades to meet their requirements.`
+            : catalog ? 'Your roster already meets their requirements.' : 'Load unlock content on the Goals tab to plan for them.'}
+        </p>
+      )}
       <p className="muted small">
-        Characters are ranked by your saved squads in each mode (weighted by the order above), recommended teams for
+        After that, characters are ranked by your saved squads in each mode (weighted by the order above), recommended teams for
         unlock content like {CONTENT_TEAMS[0]?.content}, and live events. Higher ranks get your materials first.
       </p>
       {!snapshot.squads && (
@@ -169,6 +183,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
           {doNow.map((s, i) => (
             <li key={i}>
               <strong>{nameOf(s.characterId)}</strong>: {s.title}
+              {s.goal && <span className="pill goal"> {s.goal}</span>}
               {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
               {s.cost.length > 0 && <span className="muted small"> · {formatCost(s.cost, label)}</span>}
             </li>
@@ -207,6 +222,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     : 'locked'}
                 </span>
               </h3>
+              {targets[character.info.id] && <p className="small why">{targets[character.info.id].why}</p>}
               {rank && (
                 <p className="muted small why">
                   Priority {rank.score}: {rank.reasons.map((r) => r.label).join(' · ')}
@@ -216,6 +232,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                 {steps.map((s, j) => (
                   <li key={j} className={`step ${s.status}`}>
                     <span className={`pill ${s.status}`}>{STATUS_LABEL[s.status]}</span> {s.title}
+                    {s.goal && <span className="pill goal"> {s.goal}</span>}
                     {s.status === 'short' && s.missing.length > 0 && (
                       <span className="small"> · need {formatCost(s.missing, label)}</span>
                     )}

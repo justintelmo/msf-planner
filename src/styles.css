@@ -87,3 +87,14 @@ tr.locked { opacity: .5; }
 .units { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .unit { display: flex; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
 .unit img, .unit .ph { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--bg); flex: none; }
+
+.goals h2 { font-size: 17px; margin: 20px 0 8px; }
+.goal { margin-bottom: 12px; }
+.goal header { display: flex; align-items: center; gap: 8px; }
+.goal h3 { flex: 1; }
+.source { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+.source p { margin: 4px 0; }
+.check { margin: 6px 0 10px; }
+.picks { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 2px; }
+.matches { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.pill.goal { color: var(--ok); margin-left: 6px; }

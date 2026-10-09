@@ -70,6 +70,24 @@ describe('buildPlan', () => {
     expect(p.characters[0].steps[0].modeEffects?.[0].mode).toBe('raids');
   });
 
+  it('plans goal thresholds first and continues from there', () => {
+    const gear = { '17': { slots: [{ piece: 'P17' }] }, '18': { slots: [{ piece: 'P18' }] }, '19': { slots: [] }, '20': { slots: [] } };
+    const p = buildPlan({
+      owned: [hero('A'), hero('B', { gearTier: 17, activeYellow: 5 })], upgrades, order: ['A', 'B'], levelCap: 100,
+      inventory: [{ item: 'P17', quantity: 1 }, { item: 'SHARD_B', quantity: 200 }],
+      gearTiers: { B: gear }, targets: { B: { target: { gearTier: 19, activeYellow: 6 }, why: 'DD8' } },
+    });
+    const b = p.characters.find((c) => c.character.info.id === 'B')!;
+    expect(p.characters[0].character.info.id).toBe('B');
+    expect(b.steps.filter((s) => s.goal).map((s) => [s.title, s.status])).toEqual([
+      ['Promote 5★ → 6★', 'ready'],
+      ['Finish gear tier 17 → 18', 'ready'],
+      ['Finish gear tier 18 → 19', 'short'],
+    ]);
+    // The regular plan then starts from 6★ and gear 19.
+    expect(b.steps.some((s) => !s.goal && s.title === '6★ → 7★')).toBe(true);
+  });
+
   it('unlocks a locked character at its unlock stars', () => {
     const locked: OwnedCharacter = { info: { id: 'L', unlockStars: 3, starItems: ['SHARD_L'] }, instance: { id: 'L' } };
     const steps = plan([locked], [{ item: 'SHARD_L', quantity: 100 }]).characters[0].steps;

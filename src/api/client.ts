@@ -10,6 +10,7 @@ import {
   type UpgradeTables,
   type CharacterInfo,
   type DarkDimension,
+  type EpisodicInfo,
   type NodeInfo,
   type CharacterInstance,
   type EventInfo,
@@ -175,6 +176,22 @@ export const msfApi = {
       }
     }
     return data;
+  },
+  /** A Dark Dimension with every room's requirements and rewards, plus completion rewards. */
+  async darkDimensionUnlocks(ddId: string): Promise<DarkDimension> {
+    return (await get<DarkDimension>(`/game/v1/dds/${encodeURIComponent(ddId)}`, {
+      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'full',
+      raidRewards: 'full', raidInfo: 'full', raidMap: 'full', nodeCombat: 'none', pieceInfo: 'none',
+    })).data;
+  },
+  async episodics(type: string): Promise<EpisodicInfo[]> {
+    return (await getPaged<EpisodicInfo>(`/game/v1/episodics/${encodeURIComponent(type)}`, { itemFormat: 'id', traitFormat: 'id' })).data;
+  },
+  /** An episodic with each chapter's tiers, their requirements and rewards. */
+  async episodic(type: string, id: string): Promise<EpisodicInfo> {
+    return (await get<EpisodicInfo>(`/game/v1/episodics/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, {
+      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'full', pieceInfo: 'none',
+    })).data;
   },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {

@@ -8,6 +8,7 @@ import {
   type ItemQuantity,
   type UpgradeTables,
 } from '../api/types';
+import type { Target } from './gaps';
 import type { ModeTag } from './modeTags';
 import { MODE_LABELS } from './priority';
 import { isUnlocked, type OwnedCharacter } from './requirements';
@@ -30,6 +31,8 @@ export interface Step {
   cost: Cost;
   status: StepStatus;
   missing: Cost;
+  /** The unlock goal this step works toward, when it's part of one. */
+  goal?: string;
   /** Mode-specific ability effects this step adds, e.g. "Raids: In Raids, gain +20% Damage." */
   modeEffects?: ModeTag[];
 }
@@ -63,6 +66,11 @@ export interface PlanInput {
   gearTiers?: Record<string, GearTiers>;
   /** Gold on hand. When omitted, gold costs are shown but not checked. */
   gold?: number;
+  /**
+   * Requirement thresholds from unlock goals. These characters are planned first,
+   * only up to the threshold, before the regular plan runs.
+   */
+  targets?: Record<string, { target: Target; why: string }>;
 }
 
 /** Inventory that steps draw down as they're planned, so later steps see what's left. */
@@ -176,12 +184,12 @@ function shardItem(c: OwnedCharacter): string {
   return idOf(c.info.starItems?.[0]) ?? `SHARD_${c.info.id.toUpperCase()}`;
 }
 
-function starSteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step[] {
+function starSteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger, upTo?: number): Step[] {
   const shardTotals = input.upgrades.yellowStarTotalShards;
   const goldTotals = input.upgrades.yellowStarTotalCosts;
   const shard = shardItem(c);
   const current = c.instance?.activeYellow ?? 0;
-  const max = Math.max(...levels(shardTotals));
+  const max = Math.min(upTo ?? Infinity, Math.max(...levels(shardTotals)));
   if (current >= max) return [];
 
   const costTo = (from: number, to: number): Cost => {
@@ -233,23 +241,30 @@ function isoStep(c: OwnedCharacter, input: PlanInput): Step | undefined {
   };
 }
 
-function gearStep(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step | undefined {
+/** Gear pieces still needed to finish each tier, from the current one up to (not including) `toTier`. */
+function gearSteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger, toTier?: number): Step[] {
   const tiers = input.gearTiers?.[c.info.id];
-  if (!tiers) return undefined;
-  const tier = c.instance?.gearTier ?? 1;
-  if (tier >= Math.max(...levels(tiers))) return undefined;
-  const pieces = (tiers[String(tier)]?.slots ?? []).map((s) => idOf(s.piece)).filter((p): p is string => !!p);
-  if (!pieces.length) return undefined;
-  const cost = sumCost(pieces.map((item) => ({ item, quantity: 1 })));
-  const missing = ledger.spend(cost);
-  return {
-    characterId: c.info.id, kind: 'gear', cost, missing,
-    status: missing.length ? 'short' : 'ready',
-    title: `Finish gear tier ${tier} → ${tier + 1}`,
-    detail: missing.length
-      ? 'Pieces you already equipped aren’t visible to the API, and missing pieces may be craftable.'
-      : undefined,
-  };
+  if (!tiers) return [];
+  const current = c.instance?.gearTier ?? 1;
+  const last = Math.min(toTier ?? current + 1, Math.max(...levels(tiers)));
+  const steps: Step[] = [];
+  for (let tier = current; tier < last; tier++) {
+    const slots = tiers[String(tier)]?.slots ?? [];
+    // In the current tier, skip slots the roster says are already equipped.
+    const equipped = tier === current ? (c.instance?.gearSlots ?? []) : [];
+    const pieces = slots.filter((_, i) => !equipped[i]).map((sl) => idOf(sl.piece)).filter((p): p is string => !!p);
+    if (!pieces.length) continue;
+    const cost = sumCost(pieces.map((item) => ({ item, quantity: 1 })));
+    const missing = ledger.spend(cost);
+    steps.push({
+      characterId: c.info.id, kind: 'gear', cost, missing,
+      status: missing.length ? 'short' : 'ready',
+      title: `Finish gear tier ${tier} → ${tier + 1}`,
+      detail: missing.length ? 'Missing pieces may be craftable from materials you have.' : undefined,
+    });
+    if (missing.length) break;
+  }
+  return steps;
 }
 
 function levelStep(c: OwnedCharacter, input: PlanInput): Step | undefined {
@@ -268,7 +283,7 @@ function planCharacter(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Cha
     levelStep(c, input),
     ...abilitySteps(c, input, ledger),
     ...starSteps(c, input, ledger),
-    gearStep(c, input, ledger),
+    ...gearSteps(c, input, ledger),
     isoStep(c, input),
   ].filter((s): s is Step => !!s);
   return { character: c, steps };
@@ -282,13 +297,86 @@ export function modeEffectLabel(t: ModeTag): string {
  * Plans characters in priority order. Each step draws down a shared inventory, so a
  * character earlier in the list gets materials before one further down.
  */
+/** Only the steps that bring a character up to a requirement threshold. */
+function targetSteps(c: OwnedCharacter, target: Target, input: PlanInput, ledger: Ledger): Step[] {
+  const inst = c.instance ?? { id: c.info.id };
+  const id = c.info.id;
+  const steps: (Step | undefined)[] = [];
+  if (target.level && (inst.level ?? 0) < target.level) {
+    steps.push({
+      characterId: id, kind: 'level', status: 'unchecked', cost: [], missing: [],
+      title: `Level ${inst.level ?? 0} → ${target.level}`, detail: 'Uses training modules. XP per level isn’t in the API.',
+    });
+  }
+  if (target.activeYellow) steps.push(...starSteps(c, input, ledger, target.activeYellow));
+  if (target.activeRed && (inst.activeRed ?? 0) < target.activeRed) {
+    steps.push({
+      characterId: id, kind: 'stars', status: 'unchecked', cost: [], missing: [],
+      title: `Red stars ${inst.activeRed ?? 0} → ${target.activeRed}`, detail: 'Needs red star promotion items; check in game.',
+    });
+  }
+  if (target.gearTier) steps.push(...gearSteps(c, input, ledger, target.gearTier));
+  if (target.gearTier && !input.gearTiers?.[id] && (inst.gearTier ?? 0) < target.gearTier) {
+    steps.push({
+      characterId: id, kind: 'gear', status: 'unchecked', cost: [], missing: [],
+      title: `Gear tier ${inst.gearTier ?? 0} → ${target.gearTier}`, detail: 'Gear pieces for this character haven’t loaded yet.',
+    });
+  }
+  const cls = (target.iso8Class ?? inst.iso8?.active) as IsoClass | undefined;
+  if (target.iso8Class && inst.iso8?.active !== target.iso8Class) {
+    steps.push({ characterId: id, kind: 'iso', status: 'unchecked', cost: [], missing: [], title: `Switch ISO-8 class to ${target.iso8Class}` });
+  }
+  if (target.iso8ClassLevel && cls) {
+    const table = input.upgrades.iso8AbilityUpgradeCosts[cls] ?? {};
+    const current = (inst.iso8?.[cls] as number | undefined) ?? 0;
+    const lv = levels(table).filter((l) => l > current && l <= target.iso8ClassLevel!);
+    if (lv.length) {
+      steps.push({
+        characterId: id, kind: 'iso', status: 'unchecked', missing: [],
+        cost: sumCost(...lv.map((l) => table[l])),
+        title: `ISO-8 ${cls} ${current} → ${target.iso8ClassLevel}`, detail: 'Ion balances aren’t in the API, so check this one in game.',
+      });
+    }
+  } else if (target.iso8ClassLevel && !cls) {
+    steps.push({ characterId: id, kind: 'iso', status: 'unchecked', cost: [], missing: [], title: `Choose an ISO-8 class and raise it to ${target.iso8ClassLevel}` });
+  }
+  return steps.filter((s): s is Step => !!s);
+}
+
+/** The character as it will be once its goal thresholds are met. */
+function afterTarget(c: OwnedCharacter, t: Target): OwnedCharacter {
+  if (!c.instance) return c;
+  const i = { ...c.instance };
+  for (const k of ['level', 'activeYellow', 'activeRed', 'gearTier'] as const) {
+    if (t[k] !== undefined) i[k] = Math.max(i[k] ?? 0, t[k]!);
+  }
+  if (t.gearTier !== undefined && t.gearTier! > (c.instance.gearTier ?? 0)) i.gearSlots = [];
+  return { ...c, instance: i };
+}
+
 export function buildPlan(input: PlanInput): Plan {
   const ledger = new Ledger(input.inventory, input.gold);
   const byId = new Map(input.owned.map((c) => [c.info.id, c]));
-  const characters = [...new Set(input.order)]
+  const targets = input.targets ?? {};
+
+  // Phase 1: unlock-goal thresholds, in goal order.
+  const goalPlans = Object.entries(targets)
+    .filter(([id]) => byId.has(id))
+    .map(([id, { target, why }]) => ({
+      character: byId.get(id)!,
+      steps: targetSteps(byId.get(id)!, target, input, ledger).map((s) => ({ ...s, goal: why })),
+    }));
+  // Phase 2: the regular plan, starting from where the goals leave each character.
+  const regular = [...new Set(input.order)]
     .filter((id) => byId.has(id))
-    .map((id) => planCharacter(byId.get(id)!, input, ledger));
-  const steps = characters.flatMap((p) => p.steps);
+    .map((id) => planCharacter(targets[id] ? afterTarget(byId.get(id)!, targets[id].target) : byId.get(id)!, input, ledger));
+  const merged = new Map<string, CharacterPlan>();
+  for (const p of [...goalPlans, ...regular]) {
+    const prev = merged.get(p.character.info.id);
+    merged.set(p.character.info.id, prev ? { character: prev.character, steps: [...prev.steps, ...p.steps] } : p);
+  }
+  const characters = [...merged.values()];
+  const steps = [...goalPlans, ...regular].flatMap((p) => p.steps);
   const ready = steps.filter((s) => s.status === 'ready');
   return {
     characters,

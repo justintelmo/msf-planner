@@ -7,6 +7,7 @@ import Callback from './pages/Callback';
 import DarkDimension from './pages/DarkDimension';
 import Events from './pages/Events';
 import Explore from './pages/Explore';
+import Goals from './pages/Goals';
 import Login from './pages/Login';
 import Plan from './pages/Plan';
 import Roster from './pages/Roster';
@@ -30,6 +31,7 @@ export default function App() {
       <header className="topbar">
         <strong className="brand">MSF Planner</strong>
         <nav>
+          <NavLink to="/goals">Goals</NavLink>
           <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/roster">Roster</NavLink>
           <NavLink to="/events">Events</NavLink>
@@ -64,6 +66,7 @@ export default function App() {
         ) : (
           <ErrorBoundary resetKey={pathname}>
           <Routes>
+            <Route path="/goals" element={<Goals snapshot={snapshot} />} />
             <Route path="/plan" element={<Plan snapshot={snapshot} />} />
             <Route path="/roster" element={<Roster snapshot={snapshot} />} />
             <Route path="/events" element={<Events snapshot={snapshot} />} />
