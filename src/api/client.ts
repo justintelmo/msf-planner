@@ -59,6 +59,10 @@ export const msfApi = {
   async events(): Promise<EventInfo[]> {
     return (await get<EventInfo[]>('/player/v1/events', { itemFormat: 'id', pieceInfo: 'none' })).data;
   },
+  /** Full event payload, unparsed, for inspecting fields the app doesn't model yet. */
+  async eventRaw(eventId: string): Promise<unknown> {
+    return get<unknown>(`/player/v1/events/${encodeURIComponent(eventId)}`);
+  },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {
       status: 'playable',

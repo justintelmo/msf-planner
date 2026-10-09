@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { msfApi } from '../api/client';
 import type { EventInfo, Requirements } from '../api/types';
 import type { Snapshot } from '../data/store';
 import { checkRequirements, ownedCharacters } from '../planner/requirements';
@@ -18,6 +19,33 @@ function formatSpan(seconds: number): string {
 
 function requirementsOf(e: EventInfo): Requirements | undefined {
   return e.blitz?.requirements ?? e.tower?.requirements;
+}
+
+function saveJson(name: string, value: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Downloads the full API payload for one event so unmodelled fields (nodes, enemies) can be inspected. */
+function RawDataButton({ event, live }: { event: EventInfo; live: boolean }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const download = async () => {
+    setState('loading');
+    try {
+      const data = live ? await msfApi.eventRaw(event.id) : { data: event, note: 'demo data' };
+      saveJson(`msf-event-${event.id}.json`, data);
+      setState('idle');
+    } catch {
+      setState('error');
+    }
+  };
+  return (
+    <button className="ghost small" onClick={() => void download()} disabled={state === 'loading'}>
+      {state === 'loading' ? 'Fetching…' : state === 'error' ? 'Failed, retry' : 'Download raw data'}
+    </button>
+  );
 }
 
 export default function Events({ snapshot }: { snapshot: Snapshot }) {
@@ -41,6 +69,7 @@ export default function Events({ snapshot }: { snapshot: Snapshot }) {
               <h3>{e.name ?? e.id}</h3>
               <span className="muted small">{timeLeft(e)}</span>
             </header>
+            <p className="muted small">id: {e.id}</p>
             {e.subName && <p className="muted">{e.subName}</p>}
             {req?.description && <p>Requirement: {req.description}</p>}
             {check && (
@@ -56,6 +85,9 @@ export default function Events({ snapshot }: { snapshot: Snapshot }) {
                 {progress.points !== undefined && ` · ${progress.points.toLocaleString()} points`}
               </p>
             )}
+            <p>
+              <RawDataButton event={e} live={snapshot.source === 'live'} />
+            </p>
           </article>
         );
       })}
