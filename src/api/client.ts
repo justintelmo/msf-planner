@@ -69,24 +69,40 @@ export const msfApi = {
    */
   async plannerProbe(sampleCharacterId: string): Promise<Record<string, unknown>> {
     const id = encodeURIComponent(sampleCharacterId);
-    const calls: Record<string, [string, Record<string, string>?]> = {
-      upgradeData: ['/game/v1/upgradeData'],
-      inventory: ['/player/v1/inventory'],
-      character: [`/game/v1/characters/${id}`, { costumes: 'none' }],
-      characterMissions: [`/game/v1/characters/${id}`, { costumes: 'none', abilityKits: 'none', gearTiers: 'none', charMission: 'full' }],
-      squads: ['/player/v1/squads'],
-      teamOrder: ['/game/v1/analysis/teamOrder'],
+    const safe = async (path: string, params?: Record<string, string>) => {
+      try {
+        return await get<unknown>(path, params);
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
     };
-    const entries = await Promise.all(
-      Object.entries(calls).map(async ([key, [path, params]]) => {
-        try {
-          return [key, await get<unknown>(path, params)] as const;
-        } catch (e) {
-          return [key, { error: e instanceof Error ? e.message : String(e) }] as const;
-        }
-      }),
-    );
-    return { sampleCharacterId, fetchedAt: new Date().toISOString(), ...Object.fromEntries(entries) };
+    // The full upgradeData response is over the size limit, so fetch each field on its own.
+    const upgradeFields = [
+      'characterXpCosts', 'yellowStarTotalShards', 'yellowStarTotalCosts', 'abilityLevelRequirements',
+      'abilityUpgradeCosts', 'iso8MatrixLevelRequirements', 'iso8MatrixUpgradeCosts', 'iso8AbilityUpgradeCosts',
+      'iso8FuseCosts',
+    ];
+    const character = (await safe(`/game/v1/characters/${id}`, {
+      costumes: 'none', abilityKits: 'none', pieceInfo: 'full', pieceDirectCost: 'full', pieceFlatCost: 'full',
+    })) as { data?: { gearTiers?: Record<string, { slots?: { piece?: { id?: string } }[] }> } };
+    const tiers = character.data?.gearTiers ?? {};
+    const topTier = Object.keys(tiers).map(Number).sort((a, b) => b - a)[0];
+    const pieceIds = (tiers[String(topTier)]?.slots ?? []).map((s) => s.piece?.id).filter((x): x is string => !!x);
+    const items = [`SHARD_${sampleCharacterId.toUpperCase()}`, ...pieceIds.slice(0, 3)];
+
+    const [upgrades, itemDetails, card] = await Promise.all([
+      Promise.all(upgradeFields.map(async (f) => [f, await safe(`/game/v1/upgradeData/${f}`)] as const)),
+      Promise.all(items.map(async (i) => [i, await safe(`/game/v1/items/${encodeURIComponent(i)}`, { pieceFlatCost: 'full' })] as const)),
+      safe('/player/v1/card'),
+    ]);
+    return {
+      sampleCharacterId,
+      fetchedAt: new Date().toISOString(),
+      upgradeData: Object.fromEntries(upgrades),
+      character,
+      items: Object.fromEntries(itemDetails),
+      card,
+    };
   },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {
