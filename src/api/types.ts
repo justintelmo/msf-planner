@@ -145,3 +145,55 @@ export function flattenCost(cost: ApiCost | undefined): Cost {
     .map((c) => ({ item: idOf(c.item) ?? '', quantity: c.quantity ?? 1 }))
     .filter((c) => c.item);
 }
+
+export interface NodeEffects {
+  x?: number;
+  y?: number;
+  target?: boolean;
+  vip?: boolean;
+  boss?: boolean;
+  autoPlay?: boolean;
+  gearPercent?: number;
+}
+
+/** An enemy (or ally) unit in a combat wave. */
+export interface CombatUnit extends CharacterInstance {
+  info?: CharacterInfo;
+  nodeEffects?: NodeEffects;
+}
+
+export interface CombatWave {
+  onFewerThan?: number;
+  maxSpawnPerTick?: number;
+  turnMeter?: number;
+  holdNextWaveUntil?: string;
+  holdNum?: number;
+  /** An array per unit only when a raid difficulty isn't specified. */
+  units?: (CombatUnit | CombatUnit[])[];
+}
+
+export interface NodeCombat {
+  left?: { waves?: CombatWave[] };
+  right?: { waves?: CombatWave[] };
+}
+
+export interface NodeInfo {
+  name?: string;
+  subName?: string;
+  details?: string;
+  isBoss?: boolean;
+  energyCost?: number;
+  requirements?: Requirements | (Requirements | null)[];
+  combatId?: string;
+  combat?: NodeCombat;
+}
+
+export interface DarkDimension {
+  id: string;
+  name?: string;
+  subName?: string;
+  details?: string;
+  rays?: string[][];
+  startingRoomId?: string;
+  rooms?: Record<string, NodeInfo>;
+}

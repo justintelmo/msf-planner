@@ -9,6 +9,8 @@ import {
   type Squads,
   type UpgradeTables,
   type CharacterInfo,
+  type DarkDimension,
+  type NodeInfo,
   type CharacterInstance,
   type EventInfo,
   type ItemQuantity,
@@ -148,6 +150,31 @@ export const msfApi = {
       { itemFormat: 'id', costumes: 'none', abilityKits: 'full', gearTiers: 'full', pieceInfo: 'none' },
     );
     return { gearTiers: data.gearTiers ?? {}, abilityKit: data.abilityKit };
+  },
+  async darkDimensions(): Promise<DarkDimension[]> {
+    return (await getPaged<DarkDimension>('/game/v1/dds', { nodeInfo: 'none' })).data;
+  },
+  /** The map and each room's name and requirements, without combat details. */
+  async darkDimension(ddId: string): Promise<DarkDimension> {
+    return (await get<DarkDimension>(`/game/v1/dds/${encodeURIComponent(ddId)}`, {
+      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'full', nodeReqs: 'full', nodeRewards: 'none', raidRewards: 'none',
+      nodeCombat: 'none',
+    })).data;
+  },
+  /** One room with its enemy waves, including each enemy's name and portrait. */
+  async darkDimensionRoom(ddId: string, roomId: string): Promise<NodeInfo> {
+    const { data, meta } = await get<NodeInfo>(`/game/v1/dds/${encodeURIComponent(ddId)}/${encodeURIComponent(roomId)}`, {
+      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'full', nodeReqs: 'full', nodeRewards: 'none',
+      nodeCombat: 'full', charInfo: 'full',
+    });
+    for (const side of [data.combat?.left, data.combat?.right]) {
+      for (const wave of side?.waves ?? []) {
+        for (const unit of (wave.units ?? []).flat()) {
+          if (unit.info) unit.info.portrait = resolveImg(unit.info.portrait, meta?.baseImgUrl);
+        }
+      }
+    }
+    return data;
   },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {

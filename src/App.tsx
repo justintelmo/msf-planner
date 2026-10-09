@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { logout } from './auth/auth';
 import { leave, sync, useAutoSync, useStore } from './data/store';
 import Callback from './pages/Callback';
+import DarkDimension from './pages/DarkDimension';
 import Events from './pages/Events';
 import Explore from './pages/Explore';
 import Login from './pages/Login';
@@ -30,6 +31,7 @@ export default function App() {
           <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/roster">Roster</NavLink>
           <NavLink to="/events">Events</NavLink>
+          <NavLink to="/dd">Dark Dimension</NavLink>
           <NavLink to="/explore">API</NavLink>
         </nav>
         <div className="account">
@@ -62,6 +64,7 @@ export default function App() {
             <Route path="/plan" element={<Plan snapshot={snapshot} />} />
             <Route path="/roster" element={<Roster snapshot={snapshot} />} />
             <Route path="/events" element={<Events snapshot={snapshot} />} />
+ <Route path="/dd" element={<DarkDimension snapshot={snapshot} />} />
             <Route path="/explore" element={<Explore live={snapshot.source === 'live'} />} />
             <Route path="*" element={<Navigate to="/roster" replace />} />
           </Routes>

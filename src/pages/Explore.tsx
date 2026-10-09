@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ApiError, msfApi } from '../api/client';
 import { saveJson } from '../util/download';
 
-const SUGGESTED = ['/game/v1/episodics', '/game/v1/dds', '/player/v1/episodics', '/player/v1/dds'];
+const SUGGESTED = ['/game/v1/dds', '/game/v1/episodics/unlockEvent', '/game/v1/episodics/campaign', '/game/v1/raids'];
 
 /** Calls any API path with your login and shows the raw response, to find data the app doesn't use yet. */
 export default function Explore({ live }: { live: boolean }) {

@@ -73,3 +73,17 @@ tr.locked { opacity: .5; }
 .pill.mode { color: var(--accent); margin-left: 6px; }
 .mode-effect { color: var(--accent); margin-top: 2px; }
 .json { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; max-height: 70vh; font-size: 12px; }
+
+.dd select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); max-width: 100%; }
+.dd-layout { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 720px) { .dd-layout { grid-template-columns: 1fr; } }
+.rooms { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 75vh; overflow: auto; }
+.room { width: 100%; text-align: left; font-size: 14px; }
+.room.active { border-color: var(--accent); }
+.room-detail h2 { font-size: 18px; margin: 0 0 8px; }
+.room-detail h3 { font-size: 15px; margin: 16px 0 6px; }
+.wave { margin-bottom: 10px; }
+.wave p { margin: 0 0 6px; }
+.units { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.unit { display: flex; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
+.unit img, .unit .ph { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--bg); flex: none; }
