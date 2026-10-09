@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { idOf } from '../api/types';
 import type { Snapshot } from '../data/store';
+import { msfApi } from '../api/client';
 import { rosterExport } from '../planner/export';
+import { saveJson } from '../util/download';
 import { isUnlocked, ownedCharacters, type OwnedCharacter } from '../planner/requirements';
 
 type SortKey = 'name' | 'power' | 'activeYellow' | 'activeRed' | 'gearTier' | 'level';
@@ -64,6 +66,19 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
     setTimeout(() => setCopied('idle'), 3000);
   };
 
+  const [probe, setProbe] = useState<'idle' | 'loading' | 'error'>('idle');
+  const downloadPlannerData = async () => {
+    const sample = [...unlocked].sort((a, b) => (b.instance?.power ?? 0) - (a.instance?.power ?? 0))[0];
+    if (!sample || snapshot.source !== 'live') return;
+    setProbe('loading');
+    try {
+      saveJson('msf-planner-data.json', await msfApi.plannerProbe(sample.info.id));
+      setProbe('idle');
+    } catch {
+      setProbe('error');
+    }
+  };
+
   const tcp = unlocked.reduce((sum, c) => sum + (c.instance?.power ?? 0), 0);
 
   return (
@@ -84,6 +99,16 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
         <button onClick={() => void copyExport()} title="Copy a text summary of your roster to paste into a chat">
           {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? 'Downloaded' : 'Export roster'}
         </button>
+        {snapshot.source === 'live' && (
+          <button
+            className="ghost"
+            onClick={() => void downloadPlannerData()}
+            disabled={probe === 'loading'}
+            title="Upgrade costs, inventory and a sample character, for building the planner"
+          >
+            {probe === 'loading' ? 'Fetching…' : probe === 'error' ? 'Failed, retry' : 'Download planner data'}
+          </button>
+        )}
       </div>
 
       <div className="table-wrap">

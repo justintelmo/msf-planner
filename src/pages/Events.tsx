@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { msfApi } from '../api/client';
 import type { EventInfo, Requirements } from '../api/types';
 import type { Snapshot } from '../data/store';
+import { saveJson } from '../util/download';
 import { checkRequirements, ownedCharacters } from '../planner/requirements';
 
 function timeLeft(e: EventInfo): string {
@@ -19,13 +20,6 @@ function formatSpan(seconds: number): string {
 
 function requirementsOf(e: EventInfo): Requirements | undefined {
   return e.blitz?.requirements ?? e.tower?.requirements;
-}
-
-function saveJson(name: string, value: unknown) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /** Downloads the full API payload for one event so unmodelled fields (nodes, enemies) can be inspected. */

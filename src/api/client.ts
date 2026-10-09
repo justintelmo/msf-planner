@@ -63,6 +63,31 @@ export const msfApi = {
   async eventRaw(eventId: string): Promise<unknown> {
     return get<unknown>(`/player/v1/events/${encodeURIComponent(eventId)}`);
   },
+  /**
+   * Raw responses from the endpoints the build planner will need, so their real
+   * shapes can be checked before modelling them. Failures are recorded, not thrown.
+   */
+  async plannerProbe(sampleCharacterId: string): Promise<Record<string, unknown>> {
+    const id = encodeURIComponent(sampleCharacterId);
+    const calls: Record<string, [string, Record<string, string>?]> = {
+      upgradeData: ['/game/v1/upgradeData'],
+      inventory: ['/player/v1/inventory'],
+      character: [`/game/v1/characters/${id}`, { costumes: 'none' }],
+      characterMissions: [`/game/v1/characters/${id}`, { costumes: 'none', abilityKits: 'none', gearTiers: 'none', charMission: 'full' }],
+      squads: ['/player/v1/squads'],
+      teamOrder: ['/game/v1/analysis/teamOrder'],
+    };
+    const entries = await Promise.all(
+      Object.entries(calls).map(async ([key, [path, params]]) => {
+        try {
+          return [key, await get<unknown>(path, params)] as const;
+        } catch (e) {
+          return [key, { error: e instanceof Error ? e.message : String(e) }] as const;
+        }
+      }),
+    );
+    return { sampleCharacterId, fetchedAt: new Date().toISOString(), ...Object.fromEntries(entries) };
+  },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {
       status: 'playable',
