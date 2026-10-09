@@ -1,4 +1,5 @@
 import { MSF_CONFIG } from '../config';
+import type { AbilityKit } from '../planner/modeTags';
 import { accessToken, logout } from '../auth/auth';
 import {
   flattenCost,
@@ -135,12 +136,13 @@ export const msfApi = {
   async squads(): Promise<Squads> {
     return (await get<{ tabs?: Squads }>('/player/v1/squads')).data.tabs ?? {};
   },
-  /** Gear pieces for every tier of one character. */
-  async gearTiers(characterId: string): Promise<GearTiers> {
-    const { data } = await get<{ gearTiers?: GearTiers }>(`/game/v1/characters/${encodeURIComponent(characterId)}`, {
-      itemFormat: 'id', costumes: 'none', abilityKits: 'none', gearTiers: 'full', pieceInfo: 'none',
-    });
-    return data.gearTiers ?? {};
+  /** Gear pieces for every tier, plus ability text per level, for one character. */
+  async characterDetail(characterId: string): Promise<{ gearTiers: GearTiers; abilityKit?: AbilityKit }> {
+    const { data } = await get<{ gearTiers?: GearTiers; abilityKit?: AbilityKit }>(
+      `/game/v1/characters/${encodeURIComponent(characterId)}`,
+      { itemFormat: 'id', costumes: 'none', abilityKits: 'full', gearTiers: 'full', pieceInfo: 'none' },
+    );
+    return { gearTiers: data.gearTiers ?? {}, abilityKit: data.abilityKit };
   },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {

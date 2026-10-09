@@ -97,8 +97,7 @@ export const SAMPLE_EVENTS: EventInfo[] = [
 export const SAMPLE_UPGRADES = upgradeTables as UpgradeTables;
 
 export const SAMPLE_SQUADS: Squads = {
-  roster: [
-    ['Phoenix', 'Cyclops', 'Wolverine', 'Storm', 'Gambit'],
-    ['IronMan', 'CaptainAmerica', 'SpiderMan', 'Magneto', 'Thor'],
-  ],
+  raids: [['Phoenix', 'Cyclops', 'Wolverine', 'Storm', 'Gambit']],
+  war: [['IronMan', 'CaptainAmerica', 'SpiderMan', 'Magneto', 'Thor']],
+  crucible: [['Phoenix', 'Magneto', 'IronMan', 'Storm', 'Cyclops']],
 };

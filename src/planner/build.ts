@@ -8,6 +8,8 @@ import {
   type ItemQuantity,
   type UpgradeTables,
 } from '../api/types';
+import type { ModeTag } from './modeTags';
+import { MODE_LABELS } from './priority';
 import { isUnlocked, type OwnedCharacter } from './requirements';
 
 export const GOLD = 'SC';
@@ -28,6 +30,8 @@ export interface Step {
   cost: Cost;
   status: StepStatus;
   missing: Cost;
+  /** Mode-specific ability effects this step adds, e.g. "Raids: In Raids, gain +20% Damage." */
+  modeEffects?: ModeTag[];
 }
 
 export interface CharacterPlan {
@@ -36,7 +40,7 @@ export interface CharacterPlan {
 }
 
 export interface Plan {
-  squads: CharacterPlan[][];
+  characters: CharacterPlan[];
   /** Ready steps in priority order. */
   doNow: Step[];
   /** What the blocked steps are short of, summed across the plan. */
@@ -48,8 +52,12 @@ export interface PlanInput {
   owned: OwnedCharacter[];
   inventory: ItemQuantity[];
   upgrades: UpgradeTables;
-  /** Squads in priority order, as character ids. */
-  squads: string[][];
+  /** Character ids, highest priority first. Earlier characters get materials first. */
+  order: string[];
+  /** Mode-specific ability effects per character, from their ability text. */
+  modeTags?: Record<string, ModeTag[]>;
+  /** Weight per mode; abilities with effects in heavier modes are upgraded first. */
+  modeWeights?: Record<string, number>;
   /** Highest character level reachable now. */
   levelCap: number;
   gearTiers?: Record<string, GearTiers>;
@@ -118,7 +126,15 @@ function uniqueMat(ledger: Ledger, inventory: ItemQuantity[], characterId: strin
 function abilitySteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step[] {
   const inst = c.instance!;
   const steps: Step[] = [];
-  for (const slot of ABILITY_SLOTS) {
+  const tags = input.modeTags?.[c.info.id] ?? [];
+  const weight = (t: ModeTag) => input.modeWeights?.[t.mode] ?? 0;
+  const tagsIn = (slot: AbilitySlot, from: number, to: number) =>
+    tags.filter((t) => t.slot === slot && t.level > from && t.level <= to);
+  // Abilities with effects in the player's top modes go first.
+  const slotValue = (slot: AbilitySlot) =>
+    Math.max(0, ...tagsIn(slot, inst[slot] ?? 1, Infinity).map(weight));
+  const slots = [...ABILITY_SLOTS].sort((a, b) => slotValue(b) - slotValue(a));
+  for (const slot of slots) {
     const costs = input.upgrades.abilityUpgradeCosts[slot];
     const reqs = input.upgrades.abilityLevelRequirements[slot] ?? {};
     const current = inst[slot] ?? 1;
@@ -138,7 +154,7 @@ function abilitySteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step
       if (missing.length) {
         blocked = {
           characterId: c.info.id, kind: 'ability', status: 'short', cost, missing,
-          title: `${ABILITY_NAMES[slot]} ${lv - 1} → ${lv}`,
+          title: `${ABILITY_NAMES[slot]} ${lv - 1} → ${lv}`, modeEffects: tagsIn(slot, lv - 1, lv),
         };
         break;
       }
@@ -148,7 +164,7 @@ function abilitySteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step
     if (reached > current) {
       steps.push({
         characterId: c.info.id, kind: 'ability', status: 'ready', cost: sumCost(...spent), missing: [],
-        title: `${ABILITY_NAMES[slot]} ${current} → ${reached}`,
+        title: `${ABILITY_NAMES[slot]} ${current} → ${reached}`, modeEffects: tagsIn(slot, current, reached),
       });
     }
     if (blocked) steps.push(blocked);
@@ -258,23 +274,24 @@ function planCharacter(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Cha
   return { character: c, steps };
 }
 
+export function modeEffectLabel(t: ModeTag): string {
+  return `${MODE_LABELS[t.mode] ?? t.mode}: ${t.text}`;
+}
+
 /**
- * Plans squads in priority order. Each step draws down a shared inventory, so a
+ * Plans characters in priority order. Each step draws down a shared inventory, so a
  * character earlier in the list gets materials before one further down.
  */
 export function buildPlan(input: PlanInput): Plan {
   const ledger = new Ledger(input.inventory, input.gold);
   const byId = new Map(input.owned.map((c) => [c.info.id, c]));
-  const seen = new Set<string>();
-  const squads = input.squads.map((squad) =>
-    squad
-      .filter((id) => byId.has(id) && !seen.has(id) && seen.add(id))
-      .map((id) => planCharacter(byId.get(id)!, input, ledger)),
-  ).filter((s) => s.length);
-  const steps = squads.flat().flatMap((p) => p.steps);
+  const characters = [...new Set(input.order)]
+    .filter((id) => byId.has(id))
+    .map((id) => planCharacter(byId.get(id)!, input, ledger));
+  const steps = characters.flatMap((p) => p.steps);
   const ready = steps.filter((s) => s.status === 'ready');
   return {
-    squads,
+    characters,
     doNow: ready,
     shortages: sumCost(...steps.filter((s) => s.status === 'short').map((s) => s.missing)),
     goldForReady: ready.reduce((sum, s) => sum + goldOf(s.cost), 0),

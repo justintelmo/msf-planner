@@ -61,8 +61,14 @@ tr.locked { opacity: .5; }
 .steps { margin: 0; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .shortages { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; font-size: 14px; }
 .squads { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-.plan-char + .plan-char { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+
 .plan-char h3 { font-size: 15px; margin: 0 0 6px; }
 .plan-char ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .pill.ready { color: var(--ok); }
 .pill.short { color: var(--warn); }
+.modes { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.modes li { padding: 2px 4px 2px 0; }
+.modes button { padding: 0 6px; margin-left: 2px; }
+.plan .why { margin: 0 0 8px; }
+.pill.mode { color: var(--accent); margin-left: 6px; }
+.mode-effect { color: var(--accent); margin-top: 2px; }

@@ -17,17 +17,17 @@ const hero = (id: string, over: Partial<NonNullable<OwnedCharacter['instance']>>
 });
 
 const plan = (owned: OwnedCharacter[], inventory: { item: string; quantity: number }[], gold?: number) =>
-  buildPlan({ owned, inventory, upgrades, squads: [owned.map((c) => c.info.id)], levelCap: 100, gold });
+  buildPlan({ owned, inventory, upgrades, order: owned.map((c) => c.info.id), levelCap: 100, gold });
 
 describe('buildPlan', () => {
   it('has nothing to do for a maxed character', () => {
-    expect(plan([hero('A')], []).squads[0][0].steps).toEqual([]);
+    expect(plan([hero('A')], []).characters[0].steps).toEqual([]);
   });
 
   it('merges affordable ability levels and reports the first one it can’t afford', () => {
     // Special 3→4 costs 35 blue, 4→5 costs 65 purple, 5→6 costs 125 purple.
     const steps = plan([hero('A', { special: 3 })], [{ item: blue, quantity: 35 }, { item: purple, quantity: 100 }])
-      .squads[0][0].steps;
+      .characters[0].steps;
     expect(steps.map((s) => [s.title, s.status])).toEqual([
       ['Special 3 → 5', 'ready'],
       ['Special 5 → 6', 'short'],
@@ -37,13 +37,13 @@ describe('buildPlan', () => {
 
   it('gives materials to earlier characters first', () => {
     const p = plan([hero('A', { special: 4 }), hero('B', { special: 4 })], [{ item: purple, quantity: 65 }]);
-    expect(p.squads[0][0].steps[0].status).toBe('ready');
-    expect(p.squads[0][1].steps[0].status).toBe('short');
+    expect(p.characters[0].steps[0].status).toBe('ready');
+    expect(p.characters[1].steps[0].status).toBe('short');
   });
 
   it('promotes stars with owned shards and asks for the rest', () => {
     // 5★ total is 310 shards, 6★ is 510, 7★ is 810.
-    const steps = plan([hero('A', { activeYellow: 5 })], [{ item: 'SHARD_A', quantity: 300 }]).squads[0][0].steps;
+    const steps = plan([hero('A', { activeYellow: 5 })], [{ item: 'SHARD_A', quantity: 300 }]).characters[0].steps;
     expect(steps.map((s) => [s.title, s.status])).toEqual([
       ['Promote 5★ → 6★', 'ready'],
       ['6★ → 7★', 'short'],
@@ -59,9 +59,20 @@ describe('buildPlan', () => {
     expect(broke.shortages.find((s) => s.item === GOLD)?.quantity).toBe(12000);
   });
 
+  it('upgrades abilities with effects in top modes first', () => {
+    const p = buildPlan({
+      owned: [hero('A', { special: 4, basic: 6 })], upgrades, order: ['A'], levelCap: 100,
+      inventory: [{ item: purple, quantity: 1000 }, { item: 'ABILITY_MATERIAL_ORANGE_ABILITY_MAT', quantity: 1000 }],
+      modeTags: { A: [{ slot: 'basic', level: 7, mode: 'raids', text: 'In Raids, gain Speed Up.' }] },
+      modeWeights: { raids: 40 },
+    });
+    expect(p.characters[0].steps[0].title).toBe('Basic 6 → 7');
+    expect(p.characters[0].steps[0].modeEffects?.[0].mode).toBe('raids');
+  });
+
   it('unlocks a locked character at its unlock stars', () => {
     const locked: OwnedCharacter = { info: { id: 'L', unlockStars: 3, starItems: ['SHARD_L'] }, instance: { id: 'L' } };
-    const steps = plan([locked], [{ item: 'SHARD_L', quantity: 100 }]).squads[0][0].steps;
+    const steps = plan([locked], [{ item: 'SHARD_L', quantity: 100 }]).characters[0].steps;
     expect(steps[0].title).toBe('Unlock at 3★');
     expect(steps[0].status).toBe('ready');
   });
