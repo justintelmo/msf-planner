@@ -4,6 +4,8 @@ import { accessToken, logout } from '../auth/auth';
 import {
   flattenCost,
   type ApiCost,
+  type Cost,
+  type Item,
   type ApiResponse,
   type GearTiers,
   type Squads,
@@ -126,12 +128,15 @@ export const msfApi = {
   async upgrades(): Promise<UpgradeTables> {
     const field = async <T>(name: string) =>
       (await get<T>(`/game/v1/upgradeData/${name}`, { itemFormat: 'id' })).data;
-    const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts] = await Promise.all([
+    const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts, xpCosts, levelXp] = await Promise.all([
       field<Nested<ApiCost>>('abilityUpgradeCosts'),
       field<Nested<number>>('abilityLevelRequirements'),
       field<Record<string, number>>('yellowStarTotalShards'),
       field<Record<string, ApiCost>>('yellowStarTotalCosts'),
       field<Nested<ApiCost>>('iso8AbilityUpgradeCosts'),
+      // Newer fields: a failure here shouldn't lose the rest.
+      field<{ xpReward: number; cost: ApiCost }[]>('characterXpCosts').catch(() => undefined),
+      field<(number | null)[]>('characterLevelTotalXp').catch(() => undefined),
     ]);
     return {
       abilityUpgradeCosts: mapValues(abilityCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['abilityUpgradeCosts'],
@@ -139,10 +144,31 @@ export const msfApi = {
       yellowStarTotalShards: starShards,
       yellowStarTotalCosts: mapValues(starCosts, flattenCost),
       iso8AbilityUpgradeCosts: mapValues(isoCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['iso8AbilityUpgradeCosts'],
+      characterXpCosts: xpCosts?.map((x) => ({ xpReward: x.xpReward, cost: flattenCost(x.cost) })),
+      characterLevelTotalXp: levelXp,
     };
   },
   async squads(): Promise<Squads> {
     return (await get<{ tabs?: Squads }>('/player/v1/squads')).data.tabs ?? {};
+  },
+  /**
+   * Crafting recipes for a gear piece and every sub-piece under it, as
+   * piece id → direct cost (sub-pieces and gold). Raw materials have no entry.
+   */
+  async gearRecipes(itemId: string): Promise<Record<string, Cost>> {
+    const { data } = await get<Item>(`/game/v1/items/${encodeURIComponent(itemId)}`, {
+      pieceInfo: 'full', pieceDirectCost: 'full', pieceFlatCost: 'none', subPieceInfo: 'full', statsFormat: 'none',
+    });
+    const out: Record<string, Cost> = {};
+    const walk = (item: Item | undefined) => {
+      if (!item || typeof item === 'string' || !item.id || out[item.id]) return;
+      const direct = (item as { directCost?: ApiCost }).directCost;
+      if (!direct?.length) return;
+      out[item.id] = flattenCost(direct);
+      direct.forEach((c) => walk(c.item));
+    };
+    walk(data);
+    return out;
   },
   /** Gear pieces for every tier, plus ability text per level, for one character. */
   async characterDetail(characterId: string): Promise<{ gearTiers: GearTiers; abilityKit?: AbilityKit }> {

@@ -5,16 +5,20 @@ import { readJson, writeJson } from '../auth/storage';
 import { CONTENT_TEAMS } from '../data/contentTeams';
 import { SAMPLE_UPGRADES } from '../data/sample';
 import type { Snapshot } from '../data/store';
-import { buildPlan, modeEffectLabel, type Step } from '../planner/build';
+import { buildPlan, modeEffectLabel, sumCost, type Step } from '../planner/build';
 import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
-import { goalReports, goalTargets, useUnlocks } from '../data/unlocks';
+import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks } from '../data/unlocks';
+import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
 const GOLD_KEY = 'msf.plan.gold';
+const INCOME_KEY = 'msf.plan.goldPerDay';
+const DAYS_KEY = 'msf.plan.days';
+const RECIPES_KEY = 'msf.recipes.v1';
 const MODES_KEY = 'msf.plan.modes';
 const DETAIL_KEY = 'msf.chardetail.v1';
 /** Characters whose gear and ability text get fetched; the rest are planned without them. */
@@ -71,6 +75,39 @@ function useCharacterDetails(ids: string[], live: boolean) {
   return { details, remaining };
 }
 
+/** Crafting recipes for gear pieces, cached since they don't change. */
+function useRecipes(pieces: string[], live: boolean) {
+  const [recipes, setRecipes] = useState<Recipes>(() => readJson(localStorage, RECIPES_KEY) ?? {});
+  const [tried] = useState(() => new Set<string>());
+  const [remaining, setRemaining] = useState(0);
+  const missing = pieces.filter((p) => !recipes[p] && !tried.has(p)).join(',');
+
+  useEffect(() => {
+    if (!live || !missing) return;
+    let cancelled = false;
+    const todo = missing.split(',');
+    todo.forEach((p) => tried.add(p));
+    setRemaining(todo.length);
+    (async () => {
+      for (let i = 0; i < todo.length && !cancelled; i += 4) {
+        const batch = await Promise.all(todo.slice(i, i + 4).map((p) => msfApi.gearRecipes(p).catch(() => ({}))));
+        if (cancelled) return;
+        setRecipes((r) => {
+          const next = Object.assign({}, r, ...batch);
+          writeJson(localStorage, RECIPES_KEY, next);
+          return next;
+        });
+        setRemaining(Math.max(0, todo.length - i - 4));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [missing, live, tried]);
+
+  return { recipes, remaining };
+}
+
 export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const owned = useMemo(() => ownedCharacters(snapshot), [snapshot]);
   const names = useMemo(() => {
@@ -94,15 +131,21 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   };
   const [goldText, setGoldText] = useState(() => readJson<string>(localStorage, GOLD_KEY) ?? '');
   const gold = goldText.trim() ? Number(goldText.replace(/[^\d]/g, '')) : undefined;
+  const [incomeText, setIncomeText] = useState(() => readJson<string>(localStorage, INCOME_KEY) ?? '');
+  const goldPerDay = incomeText.trim() ? Number(incomeText.replace(/[^\d]/g, '')) : undefined;
+  const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
-  const ranked = useMemo(
-    () => rankCharacters({ owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events }),
-    [owned, snapshot, modeOrder],
-  );
-  const order = useMemo(() => ranked.map((r) => r.character.info.id), [ranked]);
   const { catalog, goals } = useUnlocks();
   const reports = useMemo(() => goalReports(goals, catalog, owned), [goals, catalog, owned]);
   const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? id), [reports, names]);
+  const ranked = useMemo(
+    () => rankCharacters({
+      owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events,
+      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? id),
+    }),
+    [owned, snapshot, modeOrder, catalog, reports, names],
+  );
+  const order = useMemo(() => ranked.map((r) => r.character.info.id), [ranked]);
   const detailIds = useMemo(() => [...new Set([...Object.keys(targets), ...order])].slice(0, DETAIL_LIMIT), [order, targets]);
   const { details, remaining } = useCharacterDetails(detailIds, snapshot.source === 'live');
 
@@ -115,12 +158,44 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       order, levelCap, gearTiers, modeTags, modeWeights: modeWeights(modeOrder), gold, targets,
     });
   }, [owned, snapshot, order, levelCap, details, modeOrder, gold, targets]);
+
+  // Pieces for the current gear tier of every character in the plan, to look up crafting recipes.
+  const pieceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of detailIds) {
+      const tier = owned.find((c) => c.info.id === id)?.instance?.gearTier;
+      details[id]?.gearTiers[String(tier)]?.slots?.forEach((sl) => {
+        const p = idOf(sl.piece);
+        if (p) ids.add(p);
+      });
+    }
+    return [...ids];
+  }, [detailIds, details, owned]);
+  const { recipes, remaining: recipesLeft } = useRecipes(pieceIds, snapshot.source === 'live');
+  const priority = useMemo(() => Object.fromEntries(ranked.map((r) => [r.character.info.id, r.score])), [ranked]);
+  const schedule = useMemo(() => {
+    const gearTiers = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.gearTiers]));
+    const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
+    return buildSchedule({
+      owned, inventory: snapshot.inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
+      gearTiers, recipes, targets, modeTags, modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
+    });
+  }, [owned, snapshot, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days]);
+  const byDay = useMemo(() => {
+    const groups = new Map<string, ScheduledStep[]>();
+    for (const st of schedule.steps) {
+      const key = st.day === undefined ? 'In this order' : st.day === 0 ? 'Today, with the gold you have' : `Day ${st.day}`;
+      groups.set(key, [...(groups.get(key) ?? []), st]);
+    }
+    return [...groups];
+  }, [schedule]);
+  const farm = useMemo(
+    () => sumCost(...schedule.blocked.slice(0, 15).map((b) => b.missing)).filter((m) => !m.item.startsWith('SC')).sort((a, b) => b.quantity - a.quantity),
+    [schedule],
+  );
   const reasonsOf = useMemo(() => new Map(ranked.map((r) => [r.character.info.id, r])), [ranked]);
 
-  const [showAllSteps, setShowAllSteps] = useState(false);
   const [shownChars, setShownChars] = useState(SHOWN);
-  const doNow = showAllSteps ? plan.doNow : plan.doNow.slice(0, 15);
-  const shortages = [...plan.shortages].sort((a, b) => b.quantity - a.quantity);
   const withSteps = plan.characters.filter((p) => p.steps.length);
 
   return (
@@ -147,7 +222,30 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             }}
           />
         </label>
+        <label>
+          Gold per day{' '}
+          <input
+            inputMode="numeric" placeholder="e.g. 1500000" value={incomeText} style={{ width: 120 }}
+            onChange={(e) => {
+              setIncomeText(e.target.value);
+              writeJson(localStorage, INCOME_KEY, e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          Plan{' '}
+          <select
+            value={days}
+            onChange={(e) => {
+              setDays(Number(e.target.value));
+              writeJson(localStorage, DAYS_KEY, Number(e.target.value));
+            }}
+          >
+            {[1, 3, 7, 14, 30].map((d) => <option key={d} value={d}>{d === 1 ? '1 day' : `${d} days`}</option>)}
+          </select>
+        </label>
         {remaining > 0 && <span className="muted small">Reading gear and abilities for {remaining} characters…</span>}
+        {recipesLeft > 0 && <span className="muted small">Reading crafting recipes for {recipesLeft} gear pieces…</span>}
       </div>
       {goals.length > 0 && (
         <p className="small">
@@ -159,7 +257,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       )}
       <p className="muted small">
         After that, characters are ranked by your saved squads in each mode (weighted by the order above), recommended teams for
-        unlock content like {CONTENT_TEAMS[0]?.content}, and live events. Higher ranks get your materials first.
+        unlock content like {CONTENT_TEAMS[0]?.content}, live events, and how many unlock events and Dark Dimensions their
+        traits fit. A character useful in several places outranks one built for a single mode.
       </p>
       {!snapshot.squads && (
         <p className="muted small">Your saved squads haven’t loaded yet. Press Sync to include them.</p>
@@ -169,17 +268,20 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       ))}
 
       <div className="tiles">
-        <Tile label="Ready to do now" value={String(plan.doNow.length)} />
-        <Tile label={gold === undefined ? 'Gold for ready steps' : 'Gold left after'} value={compact(gold === undefined ? plan.goldForReady : gold - plan.goldForReady)} />
-        <Tile label="Characters ranked" value={String(order.length)} />
+        <Tile label="Steps in the list" value={String(schedule.steps.length)} />
+        <Tile label="Gold they cost" value={compact(schedule.goldUsed)} />
+        <Tile
+          label={gold === undefined ? 'Enter gold to place on days' : 'Gold left after'}
+          value={gold === undefined ? '–' : compact(Math.max(0, gold + (goldPerDay ?? 0) * Math.max(0, ...schedule.steps.map((x) => x.day ?? 0)) - schedule.goldUsed))}
+        />
       </div>
 
       {goals.length > 0 && catalog && (
         <>
           <h2>Unlock goals</h2>
           <p className="muted small">
-            Who to build for each goal and what they still need. Most of these say “check in game” because ion balances and
-            gear crafting aren’t in the API, so they won’t show up under “Do now” until the materials are on hand.
+            Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
+            means the cost uses something the API doesn’t report, like ions.
           </p>
           {reports.map((r) => {
             const checks = r.sources.flatMap((s) => s.checks);
@@ -226,36 +328,60 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </>
       )}
 
-      <h2>Do now, in this order</h2>
-      {doNow.length === 0 ? (
-        <p className="muted">Nothing is fully affordable with your current materials.</p>
+      <h2>Priority list</h2>
+      <p className="muted small">
+        Levels, abilities, gear, stars and ISO-8 across your roster, best value for the gold first. Unlock-goal thresholds
+        count triple; characters that fit many modes, events and goals rank higher. Gear is crafted from your materials
+        when a recipe is known. {gold === undefined && 'Enter gold on hand and gold per day to see which day each step fits.'}
+      </p>
+      {schedule.steps.length === 0 ? (
+        <p className="muted">Nothing is affordable with your current materials.</p>
       ) : (
-        <ol className="steps">
-          {doNow.map((s, i) => (
-            <li key={i}>
-              <strong>{nameOf(s.characterId)}</strong>: {s.title}
-              {s.goal && <span className="pill goal"> {s.goal}</span>}
-              {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
-              {s.cost.length > 0 && <span className="muted small"> · {formatCost(s.cost, label)}</span>}
-            </li>
-          ))}
-        </ol>
+        byDay.map(([day, list]) => (
+          <div key={day}>
+            <h3 className="day">{day}</h3>
+            <ol className="steps">
+              {list.map((s, i) => (
+                <li key={i}>
+                  <strong>{nameOf(s.characterId)}</strong>: {s.title}
+                  {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
+                  {s.goal && <span className="pill goal"> {s.goal}</span>}
+                  {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
+                  <span className="muted small">
+                    {' · '}{formatCost(s.cost.filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC'), label) || 'no materials'}
+                    {s.crafted && ` · crafts ${s.crafted.length} piece${s.crafted.length > 1 ? 's' : ''}`}
+                    {s.gold > 0 && ` · ${compact(s.gold)} gold`}
+                  </span>
+                  {s.detail && <div className="muted small">{s.detail}</div>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))
       )}
-      {plan.doNow.length > 15 && (
-        <button className="ghost" onClick={() => setShowAllSteps((v) => !v)}>
-          {showAllSteps ? 'Show fewer' : `Show all ${plan.doNow.length}`}
-        </button>
+      {schedule.stoppedBy === 'gold' && (
+        <p className="muted small">The list stops where your gold runs out within {days === 1 ? '1 day' : `${days} days`}.</p>
       )}
 
-      {shortages.length > 0 && (
+      {schedule.blocked.length > 0 && (
         <>
-          <h2>What you're short on</h2>
-          <p className="muted small">The next blocked step for each character needs these. Shards come from campaign nodes, events and stores.</p>
+          <h2>Farm next</h2>
+          <p className="muted small">
+            The most valuable steps waiting on materials. Training modules, gear materials and shards for these come first.
+          </p>
           <ul className="shortages">
-            {shortages.slice(0, 24).map((s) => (
-              <li key={s.item}><strong>{compact(s.quantity)}</strong> {label(s.item)}</li>
+            {farm.slice(0, 18).map((m) => (
+              <li key={m.item}><strong>{compact(m.quantity)}</strong> {label(m.item)}</li>
             ))}
           </ul>
+          <ol className="steps">
+            {schedule.blocked.slice(0, 10).map((s, i) => (
+              <li key={i} className="small">
+                <strong>{nameOf(s.characterId)}</strong>: {s.title}{s.goal && <span className="pill goal"> {s.goal}</span>}
+                <span className="muted"> · needs {formatCost(s.missing, label)}</span>
+              </li>
+            ))}
+          </ol>
         </>
       )}
 

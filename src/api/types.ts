@@ -142,6 +142,10 @@ export interface UpgradeTables {
   yellowStarTotalCosts: Record<string, Cost>;
   /** ISO-8 class level → cost to reach that level. */
   iso8AbilityUpgradeCosts: Record<IsoClass, Record<string, Cost>>;
+  /** Ways to earn character XP, e.g. one training module plus gold. */
+  characterXpCosts?: { xpReward: number; cost: Cost }[];
+  /** Total XP from level 1 to each level (index = level). */
+  characterLevelTotalXp?: (number | null)[];
 }
 
 /** Saved squads per game mode tab (e.g. roster, blitz, raids), each a list of character ids. */

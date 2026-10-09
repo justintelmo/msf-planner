@@ -106,6 +106,9 @@ export async function sync(): Promise<void> {
 
 let refreshedOldSnapshot = false;
 
+/** Cached before the planner fields existed (squads, then XP tables). */
+const isStale = (s: Snapshot) => !('plannerErrors' in s) || !s.upgrades?.characterLevelTotalXp;
+
 /**
  * Loads data once when a mode is active but nothing is cached yet, and refreshes
  * once per visit when the cache predates the planner (no squads or upgrade costs).
@@ -114,7 +117,7 @@ export function useAutoSync() {
   const { mode, snapshot } = useStore();
   useEffect(() => {
     if (mode && (!snapshot || snapshot.source !== mode)) void sync();
-    else if (mode === 'live' && snapshot && !('plannerErrors' in snapshot) && !refreshedOldSnapshot) {
+    else if (mode === 'live' && snapshot && isStale(snapshot) && !refreshedOldSnapshot) {
       refreshedOldSnapshot = true;
       void sync();
     }

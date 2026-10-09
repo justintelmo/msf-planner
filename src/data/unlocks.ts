@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { msfApi } from '../api/client';
-import { idOf, type CharacterInfo, type Requirements } from '../api/types';
+import { idOf, type CharacterFilter, type CharacterInfo, type Requirements } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
@@ -174,6 +174,24 @@ export function goalTargets(reports: GoalReport[], nameOf: (id: string) => strin
         }
       }
     }
+  }
+  return out;
+}
+
+/** Character filters per unlock source, for scoring how widely a character's traits fit. */
+export function catalogFilters(catalog: Catalog | null): { name: string; filters: CharacterFilter[] }[] {
+  return (catalog?.sources ?? []).map((s) => ({
+    name: s.name,
+    filters: s.nodes.flatMap((n) => n.requirements?.anyCharacterFilters ?? []),
+  }));
+}
+
+/** Goal names each character is picked for, from the requirement plans. */
+export function goalPicks(reports: GoalReport[], nameOf: (id: string) => string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const r of reports) {
+    const ids = new Set(r.sources.flatMap((s) => s.checks.flatMap((c) => c.plan.picks.map((p) => p.character.info.id))));
+    ids.forEach((id) => (out[id] = [...(out[id] ?? []), nameOf(r.characterId)]));
   }
   return out;
 }

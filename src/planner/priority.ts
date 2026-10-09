@@ -14,6 +14,10 @@ export function modeWeights(order: string[]): Record<string, number> {
 }
 
 const CONTENT_WEIGHT = 35;
+const GOAL_WEIGHT = 30;
+/** Per unlock source a character's traits fit, capped so it can't outrank a top mode squad. */
+const VERSATILITY_STEP = 2;
+const VERSATILITY_CAP = 30;
 const EVENT_WEIGHT = 25;
 
 export interface Reason {
@@ -34,6 +38,10 @@ export interface RankInput {
   contentTeams: ContentTeam[];
   events: EventInfo[];
   now?: number;
+  /** Trait requirements of every unlock event and Dark Dimension, one list per source. */
+  contentFilters?: { name: string; filters: CharacterFilter[] }[];
+  /** Goal names each character is picked for. */
+  goalPicks?: Record<string, string[]>;
 }
 
 const THRESHOLDS: (keyof CharacterFilter)[] = ['level', 'activeYellow', 'activeRed', 'gearTier', 'iso8ClassLevel'];
@@ -48,6 +56,13 @@ function shortOf(c: OwnedCharacter, f: CharacterFilter): string | undefined {
     f.activeRed && (i.activeRed ?? 0) < f.activeRed && `${f.activeRed} red stars (at ${i.activeRed ?? 0})`,
   ].filter(Boolean);
   return gaps.length ? gaps.join(', ') : undefined;
+}
+
+function looseOf(f: CharacterFilter): CharacterFilter {
+  const loose = { ...f };
+  THRESHOLDS.forEach((k) => delete loose[k]);
+  delete loose.iso8Class;
+  return loose;
 }
 
 function eventReasons(c: OwnedCharacter, events: EventInfo[], weights: Record<string, number>, now: number): Reason[] {
@@ -102,6 +117,22 @@ export function rankCharacters(input: RankInput): Ranked[] {
   }
   for (const c of input.owned.filter(isUnlocked)) {
     eventReasons(c, input.events, weights, now).forEach((r) => add(c.info.id, r));
+  }
+
+  for (const [id, goals] of Object.entries(input.goalPicks ?? {})) {
+    goals.forEach((g) => add(id, { label: `Needed for ${g}`, weight: GOAL_WEIGHT }));
+  }
+  // Characters whose traits fit many unlock events and Dark Dimensions keep paying off.
+  if (input.contentFilters?.length) {
+    const traited = input.contentFilters
+      .map((s) => ({ ...s, filters: s.filters.filter((f) => f.allTraits?.length || f.anyTraits?.length || f.anyCharacters?.length) }))
+      .filter((s) => s.filters.length);
+    for (const c of input.owned) {
+      const fits = traited.filter((s) => s.filters.some((f) => matchesFilter(c, looseOf(f)))).length;
+      if (fits >= 3) {
+        add(c.info.id, { label: `Fits ${fits} unlock events and Dark Dimensions`, weight: Math.min(VERSATILITY_CAP, fits * VERSATILITY_STEP) });
+      }
+    }
   }
 
   const byId = new Map(input.owned.map((c) => [c.info.id, c]));
