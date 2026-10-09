@@ -1,3 +1,4 @@
+import { plainName } from './planner/export';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { logout } from './auth/auth';
 import { leave, sync, useAutoSync, useStore } from './data/store';
@@ -30,7 +31,7 @@ export default function App() {
         <div className="account">
           {snapshot && (
             <span className="muted">
-              {snapshot.card.name}
+              {plainName(snapshot.card.name)}
               {snapshot.source === 'demo' && ' (demo data)'} · synced {new Date(snapshot.syncedAt).toLocaleTimeString()}
             </span>
           )}

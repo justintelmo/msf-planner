@@ -5,7 +5,7 @@ import type { Snapshot } from '../data/store';
 const snapshot: Snapshot = {
   source: 'demo',
   syncedAt: Date.UTC(2026, 9, 9),
-  card: { name: 'Tester', tcp: 1_000_000 },
+  card: { name: '<color=red>Tester</color>', tcp: 1_000_000 },
   characters: [
     { id: 'A', name: 'Alpha', traits: ['Hero', 'Mutant'] },
     { id: 'B', name: 'Beta', traits: ['Villain'] },

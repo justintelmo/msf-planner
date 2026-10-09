@@ -14,6 +14,11 @@ function iso(i: NonNullable<import('../api/types').CharacterInstance['iso8']> | 
   return `${i.active}${typeof level === 'number' ? ` ${level}` : ''}${i.matrix ? ` (${i.matrix})` : ''}`;
 }
 
+/** Player names can carry game markup such as <color=red>. */
+export function plainName(name: string): string {
+  return name.replace(/<\/?[a-z]+(=[^>]*)?>/gi, '').trim();
+}
+
 /**
  * A compact plain-text roster summary that can be pasted into a chat for strategy help.
  * One line per unlocked character, strongest first.
@@ -24,7 +29,7 @@ export function rosterExport(s: Snapshot): string {
     .sort((a, b) => (b.instance?.power ?? 0) - (a.instance?.power ?? 0));
 
   const header = [
-    `MSF roster export · ${s.card.name} · ${new Date(s.syncedAt).toISOString().slice(0, 10)}`,
+    `MSF roster export · ${plainName(s.card.name)} · ${new Date(s.syncedAt).toISOString().slice(0, 10)}`,
     `TCP ${(s.card.tcp ?? 0).toLocaleString('en-US')} · ${rows.length} unlocked`,
     'name | power | stars | gear | level | abilities B/S/U/P | iso-8 | traits',
   ];
