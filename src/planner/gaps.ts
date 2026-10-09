@@ -75,24 +75,29 @@ export function gapFor(c: OwnedCharacter, f: CharacterFilter): { gap: Target; ef
 export function planRequirement(roster: OwnedCharacter[], req: Requirements): RequirementPlan {
   const filters = req.anyCharacterFilters?.length ? req.anyCharacterFilters : [{}];
   const specific = req.specificCharacters ?? [];
-  const needed = specific.length || req.minCharacters || 5;
+  // Named characters must be on the team; the other slots come from the trait filters.
+  const needed = Math.max(req.minCharacters || 5, specific.length);
   const locked = roster.filter((c) => specific.includes(c.info.id) && !isUnlocked(c));
 
   const candidates: Pick[] = [];
   for (const c of roster.filter(isUnlocked)) {
-    if (specific.length && !specific.includes(c.info.id)) continue;
     let best: { gap: Target; effort: number } | undefined;
     for (const f of filters) {
       if (!matchesFilter(c, looseFilter(f))) continue;
       const g = gapFor(c, f);
       if (!best || g.effort < best.effort) best = g;
     }
+    // A named character still has to reach the thresholds, even without the traits.
+    if (!best && specific.includes(c.info.id)) best = gapFor(c, filters[0]);
     if (best) candidates.push({ character: c, ...best });
   }
   candidates.sort((a, b) => a.effort - b.effort || (b.character.instance?.power ?? 0) - (a.character.instance?.power ?? 0));
-  const picks = candidates.slice(0, needed);
-  const ready = candidates.filter((p) => p.effort === 0).length;
-  return { needed, picks, ready, met: ready >= needed && locked.length === 0, locked };
+  const required = candidates.filter((p) => specific.includes(p.character.info.id));
+  const rest = candidates.filter((p) => !specific.includes(p.character.info.id));
+  const picks = [...required, ...rest.slice(0, Math.max(0, needed - required.length))];
+  const ready = picks.filter((p) => p.effort === 0).length;
+  const missingNamed = specific.length - required.length;
+  return { needed, picks, ready, met: ready >= needed && missingNamed === 0, locked };
 }
 
 /** Combines targets for a character from several requirements, keeping the highest bar. */

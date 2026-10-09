@@ -94,9 +94,10 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
                 No event, campaign or Dark Dimension in the API rewards {nameOf(r.characterId)} right now. They may come from orbs, stores or an upcoming event.
               </p>
             ) : (
-              r.sources.map(({ source, checks }) => (
+              r.sources.map(({ source, checks, unlocks }) => (
                 <div key={source.kind + source.id} className="source">
-                  <p><strong>{source.name}</strong> <span className="muted small">{source.kind}{source.subName ? ` · ${source.subName}` : ''}</span></p>
+                  <p><strong>{source.name}</strong> <span className="muted small">{source.kind}{source.subName ? ` · ${source.subName}` : ''}</span>
+                    {unlocks && <span className="pill short"> Clear first: opens {unlocks}</span>}</p>
                   {checks.length === 0 && <p className="muted small">No character requirements.</p>}
                   {checks.map((ch, j) => (
                     <div key={j} className="check">

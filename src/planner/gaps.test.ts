@@ -25,4 +25,13 @@ describe('planRequirement', () => {
     expect(p.picks[3].gap).toEqual({ gearTier: 19 });
     expect(p.picks[4].gap).toEqual({ iso8ClassLevel: 13 });
   });
+
+  it('keeps named characters on the team and fills the rest from the traits', () => {
+    const named = { minCharacters: 5, anyCharacterFilters: [{ allTraits: ['Cosmic'], gearTier: 19 }], specificCharacters: ['E'] };
+    const p = planRequirement(roster, named);
+    expect(p.needed).toBe(5);
+    expect(p.picks[0].character.info.id).toBe('E');
+    expect(p.picks).toHaveLength(5);
+    expect(p.picks.map((x) => x.character.info.id)).toContain('A');
+  });
 });

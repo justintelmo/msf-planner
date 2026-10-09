@@ -10,6 +10,7 @@ import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { goalReports, goalTargets, useUnlocks } from '../data/unlocks';
+import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
@@ -100,10 +101,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   );
   const order = useMemo(() => ranked.map((r) => r.character.info.id), [ranked]);
   const { catalog, goals } = useUnlocks();
-  const targets = useMemo(
-    () => goalTargets(goalReports(goals, catalog, owned), (id) => names.get(id) ?? id),
-    [goals, catalog, owned, names],
-  );
+  const reports = useMemo(() => goalReports(goals, catalog, owned), [goals, catalog, owned]);
+  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? id), [reports, names]);
   const detailIds = useMemo(() => [...new Set([...Object.keys(targets), ...order])].slice(0, DETAIL_LIMIT), [order, targets]);
   const { details, remaining } = useCharacterDetails(detailIds, snapshot.source === 'live');
 
@@ -174,6 +173,58 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <Tile label={gold === undefined ? 'Gold for ready steps' : 'Gold left after'} value={compact(gold === undefined ? plan.goldForReady : gold - plan.goldForReady)} />
         <Tile label="Characters ranked" value={String(order.length)} />
       </div>
+
+      {goals.length > 0 && catalog && (
+        <>
+          <h2>Unlock goals</h2>
+          <p className="muted small">
+            Who to build for each goal and what they still need. Most of these say “check in game” because ion balances and
+            gear crafting aren’t in the API, so they won’t show up under “Do now” until the materials are on hand.
+          </p>
+          {reports.map((r) => {
+            const checks = r.sources.flatMap((s) => s.checks);
+            const met = checks.filter((c) => c.plan.met).length;
+            const merged = new Map<string, { character: (typeof owned)[number]; target: Target }>();
+            for (const c of checks) {
+              for (const p of c.plan.picks) {
+                const prev = merged.get(p.character.info.id);
+                merged.set(p.character.info.id, { character: p.character, target: prev ? mergeTargets(prev.target, p.gap) : p.gap });
+              }
+            }
+            const gaps = new Map(
+              [...merged].map(([id, m]) => [id, describeGap(m.character, m.target)] as const).filter(([, g]) => g.length),
+            );
+            const steps = plan.doNow.concat(plan.characters.flatMap((p) => p.steps.filter((x) => x.status !== 'ready')));
+            const prereqs = r.sources.filter((s) => s.unlocks).map((s) => (s.source.subName ? `${s.source.name} (${s.source.subName})` : s.source.name));
+            return (
+              <article className="card plan-goal" key={r.characterId}>
+                <h3>
+                  {nameOf(r.characterId)}{' '}
+                  <span className="muted small">
+                    {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
+                  </span>
+                </h3>
+                {prereqs.length > 0 && <p className="small warn">Clear first: {prereqs.join(', ')}.</p>}
+                <ul>
+                  {[...gaps].map(([id, g]) => {
+                    const own = steps.filter((x) => x.characterId === id && x.goal);
+                    const count = (st: Step['status']) => own.filter((x) => x.status === st).length;
+                    return (
+                      <li key={id} className="small">
+                        <strong>{nameOf(id)}</strong>: {g.join(', ')}
+                        {count('ready') > 0 && <span className="pill ready"> {count('ready')} do now</span>}
+                        {count('short') > 0 && <span className="pill short"> {count('short')} short</span>}
+                        {count('unchecked') > 0 && <span className="pill unchecked"> {count('unchecked')} check in game</span>}
+                      </li>
+                    );
+                  })}
+                  {gaps.size === 0 && r.sources.length > 0 && <li className="small ok">Your roster already meets every requirement.</li>}
+                </ul>
+              </article>
+            );
+          })}
+        </>
+      )}
 
       <h2>Do now, in this order</h2>
       {doNow.length === 0 ? (

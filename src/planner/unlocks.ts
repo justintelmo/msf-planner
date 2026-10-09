@@ -60,7 +60,7 @@ export function fromDarkDimension(dd: DarkDimension, shards: ShardIndex): Unlock
   const nodes = ids
     .map((id) => ({ id, node: dd.rooms?.[id] }))
     .filter((x): x is { id: string; node: NodeInfo } => !!x.node)
-    .map(({ node }) => ({ label: plainName(node.name ?? 'Room'), requirements: firstReq(node.requirements), rewards: nodeRewards(node, shards) }));
+    .map(({ id, node }) => ({ label: node.name ? plainName(node.name) : `Room ${id}`, requirements: firstReq(node.requirements), rewards: nodeRewards(node, shards) }));
   const completion = rewardCharacters([dd.completion, dd.ddCompletion, dd.nodeRewards], shards);
   return {
     kind: 'Dark Dimension', id: dd.id, name: plainName(dd.name ?? dd.id), subName: plainName(dd.subName),
@@ -93,11 +93,17 @@ export function distinctRequirements(source: UnlockSource): { labels: string[]; 
   const groups = new Map<string, { labels: string[]; requirements: Requirements }>();
   for (const n of source.nodes) {
     if (!hasCharacterRequirement(n.requirements)) continue;
-    const { description: _d, ...rest } = n.requirements;
+    const { description: _d, otherRequirements: _o, ...rest } = n.requirements;
     const key = JSON.stringify(rest);
     const g = groups.get(key) ?? { labels: [], requirements: n.requirements };
     g.labels.push(n.label);
     groups.set(key, g);
   }
   return [...groups.values()];
+}
+
+/** Event campaigns that must be cleared before this one opens. */
+export function prerequisiteIds(source: UnlockSource): string[] {
+  const ids = source.nodes.flatMap((n) => n.requirements?.otherRequirements?.allNodeCompletions ?? []).map((c) => c.id);
+  return [...new Set(ids)].filter((id) => id !== source.id);
 }

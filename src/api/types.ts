@@ -92,7 +92,7 @@ export interface Requirements {
   otherRequirements?: {
     playerLevel?: number;
     /** Nodes that must be completed first, e.g. the previous Dark Dimension. */
-    allNodeCompletions?: unknown[];
+    allNodeCompletions?: { type?: string; id: string; chapter?: number; tier?: number; completionStars?: number }[];
   };
 }
 

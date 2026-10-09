@@ -5,7 +5,7 @@ import { readJson, writeJson } from '../auth/storage';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
 import {
-  distinctRequirements, fromDarkDimension, fromEpisodic, type ShardIndex, type UnlockSource,
+  distinctRequirements, fromDarkDimension, fromEpisodic, prerequisiteIds, type ShardIndex, type UnlockSource,
 } from '../planner/unlocks';
 
 const CATALOG_KEY = 'msf.unlocks.v1';
@@ -27,6 +27,9 @@ export interface Catalog {
   errors: string[];
 }
 
+/** Legendaries the catch-up plan is built around. */
+export const DEFAULT_GOALS = ['Odin', 'BlueMarvel', 'Xavier'];
+
 interface State {
   catalog: Catalog | null;
   progress: string | null;
@@ -36,7 +39,8 @@ interface State {
 let state: State = {
   catalog: readJson<Catalog>(localStorage, CATALOG_KEY),
   progress: null,
-  goals: readJson<string[]>(localStorage, GOALS_KEY) ?? [],
+  // Catch-up targets until goals are saved on the Goals tab.
+  goals: readJson<string[]>(localStorage, GOALS_KEY) ?? DEFAULT_GOALS,
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
@@ -104,29 +108,51 @@ export interface RequirementCheck {
   plan: RequirementPlan;
 }
 
+export interface GoalSourceReport {
+  source: UnlockSource;
+  checks: RequirementCheck[];
+  /** Set when this source only matters because it opens another one. */
+  unlocks?: string;
+}
+
 export interface GoalReport {
   characterId: string;
-  sources: { source: UnlockSource; checks: RequirementCheck[] }[];
+  sources: GoalSourceReport[];
 }
 
 /** Campaign-style sources only need the nodes that drop the shards; events need every node. */
 const NODE_SCOPED = new Set(['Campaign', 'Event campaign']);
+const ALWAYS = new Set(['Entry']);
 
 export function goalReports(goals: string[], catalog: Catalog | null, roster: OwnedCharacter[]): GoalReport[] {
+  const all = catalog?.sources ?? [];
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const check = (source: UnlockSource) =>
+    distinctRequirements(source).map((g) => ({ ...g, plan: planRequirement(roster, g.requirements) }));
+
   return goals.map((goal) => {
-    const sources = (catalog?.sources ?? []).filter((s) => s.rewards.includes(goal));
-    return {
-      characterId: goal,
-      sources: sources.map((source) => {
-        const scoped = NODE_SCOPED.has(source.kind)
-          ? { ...source, nodes: source.nodes.filter((n) => n.rewards.includes(goal)) }
-          : source;
-        return {
-          source,
-          checks: distinctRequirements(scoped).map((g) => ({ ...g, plan: planRequirement(roster, g.requirements) })),
-        };
-      }),
+    const sources: GoalSourceReport[] = [];
+    const seen = new Set<string>();
+    // Prerequisites come before what they open, so walk them first.
+    const addPrereqs = (s: UnlockSource) => {
+      for (const id of prerequisiteIds(s)) {
+        const pre = byId.get(id);
+        if (!pre || seen.has(id)) continue;
+        seen.add(id);
+        addPrereqs(pre);
+        sources.push({ source: pre, checks: check(pre), unlocks: s.name });
+      }
     };
+    for (const source of all.filter((s) => s.rewards.includes(goal))) {
+      if (seen.has(source.id)) continue;
+      seen.add(source.id);
+      const scoped = NODE_SCOPED.has(source.kind)
+        ? { ...source, nodes: source.nodes.filter((n) => n.rewards.includes(goal) || ALWAYS.has(n.label) || n.label.startsWith('Chapter ')) }
+        : source;
+      addPrereqs(source);
+      sources.push({ source, checks: check(scoped) });
+    }
+    return { characterId: goal, sources };
   });
 }
 
