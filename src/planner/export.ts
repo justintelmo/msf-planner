@@ -15,7 +15,9 @@ function iso(i: NonNullable<import('../api/types').CharacterInstance['iso8']> | 
 }
 
 /** Player names can carry game markup such as <color=red>. */
-export function plainName(name: string): string {
+export function plainName(name: unknown): string {
+  if (name == null) return '';
+  if (typeof name !== 'string') return typeof name === 'object' ? JSON.stringify(name) : String(name);
   return name.replace(/<\/?[a-z]+(=[^>]*)?>/gi, '').trim();
 }
 

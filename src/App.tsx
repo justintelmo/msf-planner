@@ -1,5 +1,6 @@
 import { plainName } from './planner/export';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import ErrorBoundary from './ErrorBoundary';
 import { logout } from './auth/auth';
 import { leave, sync, useAutoSync, useStore } from './data/store';
 import Callback from './pages/Callback';
@@ -13,6 +14,7 @@ import Roster from './pages/Roster';
 export default function App() {
   useAutoSync();
   const { mode, snapshot, loading, error } = useStore();
+  const { pathname } = useLocation();
 
   if (!mode) {
     return (
@@ -60,6 +62,7 @@ export default function App() {
         {!snapshot ? (
           <p className="muted">Loading your account…</p>
         ) : (
+          <ErrorBoundary resetKey={pathname}>
           <Routes>
             <Route path="/plan" element={<Plan snapshot={snapshot} />} />
             <Route path="/roster" element={<Roster snapshot={snapshot} />} />
@@ -68,6 +71,7 @@ export default function App() {
             <Route path="/explore" element={<Explore live={snapshot.source === 'live'} />} />
             <Route path="*" element={<Navigate to="/roster" replace />} />
           </Routes>
+          </ErrorBoundary>
         )}
       </main>
     </div>
