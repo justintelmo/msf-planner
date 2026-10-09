@@ -68,7 +68,9 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
   const tabs = snapshot.squads ?? NO_SQUADS;
   const tabNames = useMemo(() => Object.keys(tabs).filter((t) => tabs[t]?.some((s) => s.length)), [tabs]);
-  const [tab, setTab] = useState(ALL);
+  // Blitz and Tower can hold 50+ squads each, so start with the main roster tab.
+  const [tabChoice, setTab] = useState<string | null>(null);
+  const tab = tabChoice ?? (tabs.roster?.some((s) => s.length) ? 'roster' : ALL);
   const [goldText, setGoldText] = useState(() => readJson<string>(localStorage, GOLD_KEY) ?? '');
   const gold = goldText.trim() ? Number(goldText.replace(/[^\d]/g, '')) : undefined;
 
@@ -101,10 +103,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <label>
           Plan for{' '}
           <select value={tab} onChange={(e) => setTab(e.target.value)}>
-            <option value={ALL}>All saved squads</option>
             {tabNames.map((t) => (
-              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} squads</option>
+              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} squads ({tabs[t].filter((s) => s.length).length})</option>
             ))}
+            <option value={ALL}>All saved squads</option>
           </select>
         </label>
         <label>
@@ -120,8 +122,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         {loading > 0 && <span className="muted small">Loading gear for {loading} characters…</span>}
       </div>
       {!tabNames.length && (
-        <p className="muted small">You have no saved squads in game, so this plans your 15 strongest characters.</p>
+        <p className="muted small">
+          {snapshot.squads
+            ? 'You have no saved squads in game, so this plans your 15 strongest characters.'
+            : 'Your saved squads haven’t loaded, so this plans your 15 strongest characters. Press Sync to load them.'}
+        </p>
       )}
+      {snapshot.plannerErrors?.map((e) => (
+        <p key={e} className="error small">Couldn’t load {e}</p>
+      ))}
       {!snapshot.upgrades && snapshot.source === 'live' && (
         <p className="muted small">Using cost tables from 2026-10-09. Press Sync to load the latest from the game.</p>
       )}

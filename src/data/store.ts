@@ -16,6 +16,8 @@ export interface Snapshot {
   /** Missing in snapshots cached before the build planner existed, or when the fetch failed. */
   upgrades?: UpgradeTables;
   squads?: Squads;
+  /** Why optional planner data is missing, when a fetch failed. */
+  plannerErrors?: string[];
 }
 
 export type Mode = 'live' | 'demo' | null;
@@ -83,12 +85,17 @@ export async function sync(): Promise<void> {
       };
     } else {
       // Planner data is optional: a failure there shouldn't block the roster from loading.
-      const optional = <T>(p: Promise<T>) => p.catch(() => undefined);
+      const plannerErrors: string[] = [];
+      const optional = <T>(name: string, p: Promise<T>) =>
+        p.catch((e) => {
+          plannerErrors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+          return undefined;
+        });
       const [card, characters, roster, inventory, events, upgrades, squads] = await Promise.all([
         msfApi.card(), msfApi.characters(), msfApi.roster(), msfApi.inventory(), msfApi.events(),
-        optional(msfApi.upgrades()), optional(msfApi.squads()),
+        optional('upgrade costs', msfApi.upgrades()), optional('saved squads', msfApi.squads()),
       ]);
-      snapshot = { source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads };
+      snapshot = { source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads, plannerErrors };
     }
     writeJson(localStorage, SNAPSHOT_KEY, snapshot);
     set({ snapshot, loading: false });
@@ -97,10 +104,19 @@ export async function sync(): Promise<void> {
   }
 }
 
-/** Loads data once when a mode is active but nothing is cached yet. */
+let refreshedOldSnapshot = false;
+
+/**
+ * Loads data once when a mode is active but nothing is cached yet, and refreshes
+ * once per visit when the cache predates the planner (no squads or upgrade costs).
+ */
 export function useAutoSync() {
   const { mode, snapshot } = useStore();
   useEffect(() => {
     if (mode && (!snapshot || snapshot.source !== mode)) void sync();
+    else if (mode === 'live' && snapshot && !('plannerErrors' in snapshot) && !refreshedOldSnapshot) {
+      refreshedOldSnapshot = true;
+      void sync();
+    }
   }, [mode, snapshot]);
 }
