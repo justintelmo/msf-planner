@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { EventInfo, Requirements } from '../api/types';
-import { ownedCharacters, type Snapshot } from '../data/store';
-import { checkRequirements } from '../planner/requirements';
+import type { Snapshot } from '../data/store';
+import { checkRequirements, ownedCharacters } from '../planner/requirements';
 
 function timeLeft(e: EventInfo): string {
   const now = Date.now() / 1000;

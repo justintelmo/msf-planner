@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { idOf } from '../api/types';
-import { ownedCharacters, type Snapshot } from '../data/store';
-import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
+import type { Snapshot } from '../data/store';
+import { rosterExport } from '../planner/export';
+import { isUnlocked, ownedCharacters, type OwnedCharacter } from '../planner/requirements';
 
 type SortKey = 'name' | 'power' | 'activeYellow' | 'activeRed' | 'gearTier' | 'level';
 
@@ -28,6 +29,7 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
   const all = useMemo(() => ownedCharacters(snapshot), [snapshot]);
   const [query, setQuery] = useState('');
   const [showLocked, setShowLocked] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'power', desc: true });
 
   const unlocked = all.filter(isUnlocked);
@@ -46,6 +48,22 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
       return sort.desc ? -cmp : cmp;
     });
 
+  const copyExport = async () => {
+    const text = rosterExport(snapshot);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied('copied');
+    } catch {
+      // Clipboard can be blocked; fall back to downloading the text.
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'msf-roster.txt' });
+      a.click();
+      URL.revokeObjectURL(url);
+      setCopied('failed');
+    }
+    setTimeout(() => setCopied('idle'), 3000);
+  };
+
   const tcp = unlocked.reduce((sum, c) => sum + (c.instance?.power ?? 0), 0);
 
   return (
@@ -63,6 +81,9 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
           <input type="checkbox" checked={showLocked} onChange={(e) => setShowLocked(e.target.checked)} /> Show locked
         </label>
         <span className="muted">{rows.length} shown</span>
+        <button onClick={() => void copyExport()} title="Copy a text summary of your roster to paste into a chat">
+          {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? 'Downloaded' : 'Export roster'}
+        </button>
       </div>
 
       <div className="table-wrap">

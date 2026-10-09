@@ -3,7 +3,6 @@ import { msfApi } from '../api/client';
 import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard } from '../api/types';
 import { isLoggedIn, onAuthChange } from '../auth/auth';
 import { readJson, writeJson } from '../auth/storage';
-import type { OwnedCharacter } from '../planner/requirements';
 import { SAMPLE_CARD, SAMPLE_CHARACTERS, SAMPLE_EVENTS, SAMPLE_INVENTORY, SAMPLE_ROSTER } from './sample';
 
 export interface Snapshot {
@@ -97,10 +96,4 @@ export function useAutoSync() {
   useEffect(() => {
     if (mode && (!snapshot || snapshot.source !== mode)) void sync();
   }, [mode, snapshot]);
-}
-
-/** Every playable character, joined with the player's instance when they have one. */
-export function ownedCharacters(s: Snapshot): OwnedCharacter[] {
-  const byId = new Map(s.roster.map((r) => [r.id, r]));
-  return s.characters.map((info) => ({ info, instance: byId.get(info.id) }));
 }

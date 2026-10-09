@@ -1,8 +1,20 @@
 import { idOf, type CharacterFilter, type CharacterInfo, type CharacterInstance, type Requirements } from '../api/types';
 
+/** The parts of a synced snapshot the planner needs. */
+export interface RosterData {
+  characters: CharacterInfo[];
+  roster: CharacterInstance[];
+}
+
 export interface OwnedCharacter {
   info: CharacterInfo;
   instance?: CharacterInstance;
+}
+
+/** Every playable character, joined with the player's instance when they have one. */
+export function ownedCharacters(s: RosterData): OwnedCharacter[] {
+  const byId = new Map(s.roster.map((r) => [r.id, r]));
+  return s.characters.map((info) => ({ info, instance: byId.get(info.id) }));
 }
 
 export function isUnlocked(c: OwnedCharacter): boolean {

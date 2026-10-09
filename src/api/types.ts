@@ -40,6 +40,15 @@ export interface CharacterInstance {
   passive?: number;
   power?: number;
   favorite?: boolean;
+  iso8?: {
+    matrix?: string;
+    active?: string;
+    striker?: number;
+    fortifier?: number;
+    healer?: number;
+    skirmisher?: number;
+    raider?: number;
+  };
 }
 
 export interface ItemQuantity {
