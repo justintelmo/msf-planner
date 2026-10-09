@@ -36,7 +36,7 @@ export interface RankInput {
   now?: number;
 }
 
-const THRESHOLDS: (keyof CharacterFilter)[] = ['level', 'activeYellow', 'activeRed', 'gearTier'];
+const THRESHOLDS: (keyof CharacterFilter)[] = ['level', 'activeYellow', 'activeRed', 'gearTier', 'iso8ClassLevel'];
 
 /** Requirement text for what the character still lacks, e.g. "gear 17 (you're at 15)". */
 function shortOf(c: OwnedCharacter, f: CharacterFilter): string | undefined {

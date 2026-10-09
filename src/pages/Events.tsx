@@ -3,6 +3,7 @@ import { msfApi } from '../api/client';
 import type { EventInfo, Requirements } from '../api/types';
 import type { Snapshot } from '../data/store';
 import { saveJson } from '../util/download';
+import { plainName } from '../planner/export';
 import { checkRequirements, ownedCharacters } from '../planner/requirements';
 
 function timeLeft(e: EventInfo): string {
@@ -65,7 +66,7 @@ export default function Events({ snapshot }: { snapshot: Snapshot }) {
             </header>
             <p className="muted small">id: {e.id}</p>
             {e.subName && <p className="muted">{e.subName}</p>}
-            {req?.description && <p>Requirement: {req.description}</p>}
+            {req?.description && <p>Requirement: {plainName(req.description)}</p>}
             {check && (
               <p className={check.met ? 'ok' : 'warn'}>
                 {check.met ? '✓' : '✗'} {check.eligible.length} eligible of {check.needed} needed

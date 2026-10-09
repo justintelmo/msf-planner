@@ -22,6 +22,15 @@ describe('matchesFilter', () => {
   });
 });
 
+describe('iso8ClassLevel', () => {
+  it('uses the active ISO-8 class level', () => {
+    const c = { info: { id: 'X' }, instance: { id: 'X', activeYellow: 7, iso8: { active: 'raider', raider: 13 } } };
+    expect(matchesFilter(c, { iso8ClassLevel: 13 })).toBe(true);
+    expect(matchesFilter(c, { iso8ClassLevel: 14 })).toBe(false);
+    expect(matchesFilter(roster[0], { iso8ClassLevel: 1 })).toBe(false);
+  });
+});
+
 describe('checkRequirements', () => {
   it('ignores locked characters and sorts by power', () => {
     const r = checkRequirements(roster, { minCharacters: 2, anyCharacterFilters: [{ anyTraits: ['Mutant'] }] });

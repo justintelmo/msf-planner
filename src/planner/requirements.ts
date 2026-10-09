@@ -27,6 +27,13 @@ function traitIds(info: CharacterInfo): Set<string> {
   );
 }
 
+/** Level of the active ISO-8 class, e.g. 13 for purple level 3. */
+export function isoClassLevel(i: CharacterInstance): number {
+  const cls = i.iso8?.active as keyof NonNullable<CharacterInstance['iso8']> | undefined;
+  const level = cls ? i.iso8?.[cls] : undefined;
+  return typeof level === 'number' ? level : 0;
+}
+
 /** Mirrors the API's CharacterFilter: a character must satisfy every field present. */
 export function matchesFilter(c: OwnedCharacter, f: CharacterFilter): boolean {
   const traits = traitIds(c.info);
@@ -40,6 +47,7 @@ export function matchesFilter(c: OwnedCharacter, f: CharacterFilter): boolean {
   if (f.activeYellow && (i.activeYellow ?? 0) < f.activeYellow) return false;
   if (f.activeRed && (i.activeRed ?? 0) < f.activeRed) return false;
   if (f.gearTier && (i.gearTier ?? 0) < f.gearTier) return false;
+  if (f.iso8ClassLevel && isoClassLevel(i) < f.iso8ClassLevel) return false;
   return true;
 }
 

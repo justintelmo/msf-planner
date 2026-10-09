@@ -74,6 +74,8 @@ export interface CharacterFilter {
   activeYellow?: number;
   activeRed?: number;
   gearTier?: number;
+  /** Minimum level of the character's active ISO-8 class. */
+  iso8ClassLevel?: number;
 }
 
 export interface Requirements {
@@ -81,7 +83,8 @@ export interface Requirements {
   maxCharacters?: number;
   anyCharacterFilters?: CharacterFilter[];
   specificCharacters?: string[];
-  description?: string;
+  /** A string, or an array of lines on node requirements. */
+  description?: string | string[];
 }
 
 export interface Progress {
@@ -146,7 +149,16 @@ export function flattenCost(cost: ApiCost | undefined): Cost {
     .filter((c) => c.item);
 }
 
+export interface AbilityEnergy {
+  startEnergy?: number;
+  costEnergy?: number;
+}
+
 export interface NodeEffects {
+  specialOverride?: AbilityEnergy;
+  ultimateOverride?: AbilityEnergy;
+  /** Percent stat boosts, e.g. { health: 700, damage: 900 }. */
+  boosts?: Record<string, number>;
   x?: number;
   y?: number;
   target?: boolean;

@@ -39,6 +39,13 @@ function waveTrigger(w: CombatWave, i: number): string {
 
 function Unit({ u }: { u: CombatUnit }) {
   const name = plainName(u.info?.name ?? u.id);
+  const fx = u.nodeEffects;
+  // Node overrides that let an enemy fire abilities far more often than normal.
+  const cheats = [
+    fx?.specialOverride && `Special every ${fx.specialOverride.costEnergy ?? '?'} energy`,
+    fx?.ultimateOverride && `Ultimate every ${fx.ultimateOverride.costEnergy ?? '?'} energy`,
+  ].filter(Boolean);
+  const boosts = fx?.boosts ? Object.entries(fx.boosts).filter(([k]) => ['health', 'damage'].includes(k)) : [];
   const flags = [u.nodeEffects?.boss && 'Boss', u.nodeEffects?.vip && 'VIP', u.nodeEffects?.target && 'Target'].filter(Boolean);
   return (
     <li className="unit">
@@ -46,10 +53,12 @@ function Unit({ u }: { u: CombatUnit }) {
       <div>
         <strong>{name}</strong>
         {flags.length > 0 && <span className="pill short"> {flags.join(' · ')}</span>}
+        {cheats.length > 0 && <div className="small warn">{cheats.join(' · ')}</div>}
         <div className="muted small">
           L{u.level ?? '?'} · G{u.gearTier ?? '?'}{u.nodeEffects?.gearPercent ? `+${u.nodeEffects.gearPercent}%` : ''} ·{' '}
           {u.activeYellow ?? '?'}★{u.activeRed ? `/${u.activeRed}R` : ''}
           {u.power ? ` · ${u.power.toLocaleString()} power` : ''}
+          {boosts.length > 0 && ` · ${boosts.map(([k, v]) => `+${v}% ${k}`).join(', ')}`}
         </div>
       </div>
     </li>
