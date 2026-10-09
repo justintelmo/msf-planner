@@ -55,3 +55,14 @@ tr.locked { opacity: .5; }
 .card h3 { margin: 0; font-size: 16px; flex: 1; }
 .card p { margin: 8px 0 0; font-size: 14px; }
 .pill { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; background: var(--bg); color: var(--muted); }
+
+.plan h2 { font-size: 17px; margin: 20px 0 8px; }
+.plan select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.steps { margin: 0; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.shortages { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; font-size: 14px; }
+.squads { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.plan-char + .plan-char { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.plan-char h3 { font-size: 15px; margin: 0 0 6px; }
+.plan-char ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.pill.ready { color: var(--ok); }
+.pill.short { color: var(--warn); }

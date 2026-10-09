@@ -1,9 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { msfApi } from '../api/client';
-import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard } from '../api/types';
+import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard, Squads, UpgradeTables } from '../api/types';
 import { isLoggedIn, onAuthChange } from '../auth/auth';
 import { readJson, writeJson } from '../auth/storage';
-import { SAMPLE_CARD, SAMPLE_CHARACTERS, SAMPLE_EVENTS, SAMPLE_INVENTORY, SAMPLE_ROSTER } from './sample';
+import { SAMPLE_CARD, SAMPLE_CHARACTERS, SAMPLE_EVENTS, SAMPLE_INVENTORY, SAMPLE_ROSTER, SAMPLE_SQUADS, SAMPLE_UPGRADES } from './sample';
 
 export interface Snapshot {
   source: 'live' | 'demo';
@@ -13,6 +13,9 @@ export interface Snapshot {
   roster: CharacterInstance[];
   inventory: ItemQuantity[];
   events: EventInfo[];
+  /** Missing in snapshots cached before the build planner existed, or when the fetch failed. */
+  upgrades?: UpgradeTables;
+  squads?: Squads;
 }
 
 export type Mode = 'live' | 'demo' | null;
@@ -76,12 +79,16 @@ export async function sync(): Promise<void> {
       snapshot = {
         source: 'demo', syncedAt: Date.now(), card: SAMPLE_CARD, characters: SAMPLE_CHARACTERS,
         roster: SAMPLE_ROSTER, inventory: SAMPLE_INVENTORY, events: SAMPLE_EVENTS,
+        upgrades: SAMPLE_UPGRADES, squads: SAMPLE_SQUADS,
       };
     } else {
-      const [card, characters, roster, inventory, events] = await Promise.all([
+      // Planner data is optional: a failure there shouldn't block the roster from loading.
+      const optional = <T>(p: Promise<T>) => p.catch(() => undefined);
+      const [card, characters, roster, inventory, events, upgrades, squads] = await Promise.all([
         msfApi.card(), msfApi.characters(), msfApi.roster(), msfApi.inventory(), msfApi.events(),
+        optional(msfApi.upgrades()), optional(msfApi.squads()),
       ]);
-      snapshot = { source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events };
+      snapshot = { source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads };
     }
     writeJson(localStorage, SNAPSHOT_KEY, snapshot);
     set({ snapshot, loading: false });

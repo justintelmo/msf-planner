@@ -109,3 +109,39 @@ export interface EventInfo {
 export function idOf(value: Trait | Item | undefined): string | undefined {
   return typeof value === 'string' ? value : value?.id;
 }
+
+export type AbilitySlot = 'basic' | 'special' | 'ultimate' | 'passive';
+export const ABILITY_SLOTS: AbilitySlot[] = ['ultimate', 'special', 'passive', 'basic'];
+export type IsoClass = 'striker' | 'fortifier' | 'healer' | 'skirmisher' | 'raider';
+
+/** An upgrade cost as the API returns it: items with quantities (gold is item "SC"). */
+export type ApiCost = { item: Item; quantity?: number }[];
+export type Cost = { item: string; quantity: number }[];
+
+/** The /game/v1/upgradeData fields the build planner uses, with item ids flattened. */
+export interface UpgradeTables {
+  /** Ability level → cost to reach that level. */
+  abilityUpgradeCosts: Record<AbilitySlot, Record<string, Cost>>;
+  /** Ability level → minimum character level. */
+  abilityLevelRequirements: Record<AbilitySlot, Record<string, number>>;
+  /** Yellow stars → total shards needed to reach them from zero. */
+  yellowStarTotalShards: Record<string, number>;
+  /** Yellow stars → total gold to reach them from zero. */
+  yellowStarTotalCosts: Record<string, Cost>;
+  /** ISO-8 class level → cost to reach that level. */
+  iso8AbilityUpgradeCosts: Record<IsoClass, Record<string, Cost>>;
+}
+
+/** Saved squads per game mode tab (e.g. roster, blitz, raids), each a list of character ids. */
+export type Squads = Record<string, string[][]>;
+
+export interface GearSlot {
+  piece?: Item & { tier?: number };
+}
+export type GearTiers = Record<string, { slots?: GearSlot[] }>;
+
+export function flattenCost(cost: ApiCost | undefined): Cost {
+  return (cost ?? [])
+    .map((c) => ({ item: idOf(c.item) ?? '', quantity: c.quantity ?? 1 }))
+    .filter((c) => c.item);
+}

@@ -5,6 +5,7 @@ import { leave, sync, useAutoSync, useStore } from './data/store';
 import Callback from './pages/Callback';
 import Events from './pages/Events';
 import Login from './pages/Login';
+import Plan from './pages/Plan';
 import Roster from './pages/Roster';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       <header className="topbar">
         <strong className="brand">MSF Planner</strong>
         <nav>
+          <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/roster">Roster</NavLink>
           <NavLink to="/events">Events</NavLink>
         </nav>
@@ -55,6 +57,7 @@ export default function App() {
           <p className="muted">Loading your account…</p>
         ) : (
           <Routes>
+            <Route path="/plan" element={<Plan snapshot={snapshot} />} />
             <Route path="/roster" element={<Roster snapshot={snapshot} />} />
             <Route path="/events" element={<Events snapshot={snapshot} />} />
             <Route path="*" element={<Navigate to="/roster" replace />} />

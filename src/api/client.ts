@@ -1,13 +1,22 @@
 import { MSF_CONFIG } from '../config';
 import { accessToken, logout } from '../auth/auth';
-import type {
-  ApiResponse,
-  CharacterInfo,
-  CharacterInstance,
-  EventInfo,
-  ItemQuantity,
-  PlayerCard,
+import {
+  flattenCost,
+  type ApiCost,
+  type ApiResponse,
+  type GearTiers,
+  type Squads,
+  type UpgradeTables,
+  type CharacterInfo,
+  type CharacterInstance,
+  type EventInfo,
+  type ItemQuantity,
+  type PlayerCard,
 } from './types';
+
+type Nested<T> = Record<string, Record<string, T>>;
+const mapValues = <A, B>(o: Record<string, A>, f: (a: A) => B): Record<string, B> =>
+  Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, f(v)]));
 
 /** Keeps each page under the API's 472 kB response limit. */
 const PAGE_SIZE = 100;
@@ -103,6 +112,35 @@ export const msfApi = {
       items: Object.fromEntries(itemDetails),
       card,
     };
+  },
+  /** Fetched field by field: the full upgradeData response is over the API's size limit. */
+  async upgrades(): Promise<UpgradeTables> {
+    const field = async <T>(name: string) =>
+      (await get<T>(`/game/v1/upgradeData/${name}`, { itemFormat: 'id' })).data;
+    const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts] = await Promise.all([
+      field<Nested<ApiCost>>('abilityUpgradeCosts'),
+      field<Nested<number>>('abilityLevelRequirements'),
+      field<Record<string, number>>('yellowStarTotalShards'),
+      field<Record<string, ApiCost>>('yellowStarTotalCosts'),
+      field<Nested<ApiCost>>('iso8AbilityUpgradeCosts'),
+    ]);
+    return {
+      abilityUpgradeCosts: mapValues(abilityCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['abilityUpgradeCosts'],
+      abilityLevelRequirements: abilityReqs as UpgradeTables['abilityLevelRequirements'],
+      yellowStarTotalShards: starShards,
+      yellowStarTotalCosts: mapValues(starCosts, flattenCost),
+      iso8AbilityUpgradeCosts: mapValues(isoCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['iso8AbilityUpgradeCosts'],
+    };
+  },
+  async squads(): Promise<Squads> {
+    return (await get<{ tabs?: Squads }>('/player/v1/squads')).data.tabs ?? {};
+  },
+  /** Gear pieces for every tier of one character. */
+  async gearTiers(characterId: string): Promise<GearTiers> {
+    const { data } = await get<{ gearTiers?: GearTiers }>(`/game/v1/characters/${encodeURIComponent(characterId)}`, {
+      itemFormat: 'id', costumes: 'none', abilityKits: 'none', gearTiers: 'full', pieceInfo: 'none',
+    });
+    return data.gearTiers ?? {};
   },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {

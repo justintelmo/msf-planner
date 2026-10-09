@@ -1,4 +1,5 @@
-import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard } from '../api/types';
+import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard, Squads, UpgradeTables } from '../api/types';
+import upgradeTables from './upgradeTables.json';
 
 /**
  * Made-up demo data so the app can be tried without logging in.
@@ -41,8 +42,12 @@ export const SAMPLE_ROSTER: CharacterInstance[] = [
 ];
 
 export const SAMPLE_INVENTORY: ItemQuantity[] = [
-  { item: 'Gold', quantity: 48_500_000 },
-  { item: 'TrainingModule', quantity: 1_240 },
+  { item: 'ABILITY_MATERIAL_BLUE_ABILITY_MAT', quantity: 900 },
+  { item: 'ABILITY_MATERIAL_PURPLE_ABILITY_MAT', quantity: 1_400 },
+  { item: 'ABILITY_MATERIAL_ORANGE_ABILITY_MAT', quantity: 300 },
+  { item: 'SHARD_STORM', quantity: 220 },
+  { item: 'SHARD_GAMBIT', quantity: 60 },
+  { item: 'CONSUMABLE_XPLVL80', quantity: 1_240 },
 ];
 
 const now = Math.floor(Date.now() / 1000);
@@ -87,3 +92,13 @@ export const SAMPLE_EVENTS: EventInfo[] = [
     milestone: { type: 'solo', brackets: [{ objective: { progress: { completedTier: 6, goalTier: 15, points: 41_000, goal: 120_000 } } }] },
   },
 ];
+
+/** Real game cost tables from /game/v1/upgradeData, captured 2026-10-09. */
+export const SAMPLE_UPGRADES = upgradeTables as UpgradeTables;
+
+export const SAMPLE_SQUADS: Squads = {
+  roster: [
+    ['Phoenix', 'Cyclops', 'Wolverine', 'Storm', 'Gambit'],
+    ['IronMan', 'CaptainAmerica', 'SpiderMan', 'Magneto', 'Thor'],
+  ],
+};
