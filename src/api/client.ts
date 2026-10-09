@@ -69,6 +69,11 @@ export const msfApi = {
   async events(): Promise<EventInfo[]> {
     return (await get<EventInfo[]>('/player/v1/events', { itemFormat: 'id', pieceInfo: 'none' })).data;
   },
+  /** Any GET path, unparsed, for exploring endpoints the app doesn't use yet. */
+  async raw(pathWithQuery: string): Promise<unknown> {
+    const url = new URL(pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`, 'https://x');
+    return get<unknown>(url.pathname, Object.fromEntries(url.searchParams));
+  },
   /** Full event payload, unparsed, for inspecting fields the app doesn't model yet. */
   async eventRaw(eventId: string): Promise<unknown> {
     return get<unknown>(`/player/v1/events/${encodeURIComponent(eventId)}`);
