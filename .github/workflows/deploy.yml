@@ -23,13 +23,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Check MSF settings are configured
+        env:
+          CLIENT_ID: ${{ secrets.VITE_MSF_CLIENT_ID || vars.VITE_MSF_CLIENT_ID }}
+          API_KEY: ${{ secrets.VITE_MSF_API_KEY || vars.VITE_MSF_API_KEY }}
+        run: |
+          missing=0
+          [ -n "$CLIENT_ID" ] || { echo "::error::VITE_MSF_CLIENT_ID is not set as a repository secret or variable"; missing=1; }
+          [ -n "$API_KEY" ] || { echo "::error::VITE_MSF_API_KEY is not set as a repository secret or variable"; missing=1; }
+          exit $missing
       - run: npm ci
       - run: npm test
       - run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_MSF_CLIENT_ID: ${{ secrets.VITE_MSF_CLIENT_ID }}
-          VITE_MSF_API_KEY: ${{ secrets.VITE_MSF_API_KEY }}
+          # Accept either repository secrets or repository variables.
+          VITE_MSF_CLIENT_ID: ${{ secrets.VITE_MSF_CLIENT_ID || vars.VITE_MSF_CLIENT_ID }}
+          VITE_MSF_API_KEY: ${{ secrets.VITE_MSF_API_KEY || vars.VITE_MSF_API_KEY }}
       # Pages has no SPA fallback; serving index.html as 404.html lets /callback load the app.
       - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
