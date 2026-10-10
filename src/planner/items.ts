@@ -27,6 +27,6 @@ export function formatCost(cost: Cost, label: (id: string) => string): string {
 
 export function compact(n: number): string {
   if (n >= 1e6) return `${+(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`;
-  if (n >= 1e4) return `${+(n / 1e3).toFixed(0)}K`;
+  if (n >= 1e4) return `${+(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}K`;
   return n.toLocaleString();
 }

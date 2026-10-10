@@ -115,6 +115,14 @@ details > summary { cursor: pointer; }
 .settings > summary { list-style-position: outside; }
 .settings[open] > summary { margin-bottom: 12px; }
 .settings .toolbar { margin-bottom: 0; }
+.currencies { margin-bottom: 12px; }
+.currencies[open] > summary { margin-bottom: 8px; }
+.currencies h4 { margin: 12px 0 4px; }
+.amounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 10px 16px; }
+.amounts.ions { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.amount { display: flex; flex-direction: column; gap: 2px; }
+.amount input { width: 100%; box-sizing: border-box; }
+.amount input[aria-invalid="true"] { border-color: #e57373; }
 .explain { margin: 0 0 12px; }
 .explain > summary { color: var(--muted); }
 .explain p { margin: 8px 0; }

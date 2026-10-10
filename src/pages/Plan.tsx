@@ -10,14 +10,14 @@ import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { modeReports, useModeGoals } from '../data/modeGoals';
+import { GOLD_ID, useWallet } from '../data/wallet';
+import Currencies, { withTypedAmounts } from './Currencies';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
-const GOLD_KEY = 'msf.plan.gold';
-const INCOME_KEY = 'msf.plan.goldPerDay';
 const DAYS_KEY = 'msf.plan.days';
 const RECIPES_KEY = 'msf.recipes.v1';
 const MODES_KEY = 'msf.plan.modes';
@@ -130,12 +130,11 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     setModeOrder(next);
     writeJson(localStorage, MODES_KEY, next);
   };
-  const [goldText, setGoldText] = useState(() => readJson<string>(localStorage, GOLD_KEY) ?? '');
-  const gold = goldText.trim() ? Number(goldText.replace(/[^\d]/g, '')) : undefined;
-  const [incomeText, setIncomeText] = useState(() => readJson<string>(localStorage, INCOME_KEY) ?? '');
-  const goldPerDay = incomeText.trim() ? Number(incomeText.replace(/[^\d]/g, '')) : undefined;
-  // Open until gold is entered, so the first visit shows where to type it.
-  const [settingsOpen, setSettingsOpen] = useState(() => !readJson<string>(localStorage, GOLD_KEY));
+  const wallet = useWallet();
+  const gold = wallet.amounts[GOLD_ID];
+  const goldPerDay = wallet.goldPerDay;
+  const inventory = useMemo(() => withTypedAmounts(snapshot.inventory, wallet.amounts), [snapshot.inventory, wallet.amounts]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
   const { catalog, goals } = useUnlocks();
@@ -161,10 +160,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const gearTiers = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.gearTiers]));
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildPlan({
-      owned, inventory: snapshot.inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES,
+      owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES,
       order, levelCap, gearTiers, modeTags, modeWeights: modeWeights(modeOrder), gold, targets,
     });
-  }, [owned, snapshot, order, levelCap, details, modeOrder, gold, targets]);
+  }, [owned, snapshot, inventory, order, levelCap, details, modeOrder, gold, targets]);
 
   // Pieces for the current gear tier of every character in the plan, to look up crafting recipes.
   const pieceIds = useMemo(() => {
@@ -184,10 +183,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const gearTiers = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.gearTiers]));
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildSchedule({
-      owned, inventory: snapshot.inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
+      owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
       gearTiers, recipes, targets, modeTags, modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
     });
-  }, [owned, snapshot, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days]);
+  }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days]);
   const byDay = useMemo(() => {
     const groups = new Map<string, ScheduledStep[]>();
     for (const st of schedule.steps) {
@@ -250,12 +249,12 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <section className="plan">
+      <Currencies inventory={snapshot.inventory} upgrades={snapshot.upgrades ?? SAMPLE_UPGRADES} label={label} />
       <details className="card settings" open={settingsOpen} onToggle={(e) => setSettingsOpen((e.target as HTMLDetailsElement).open)}>
         <summary>
           <strong>Settings</strong>{' '}
           <span className="muted small">
-            {gold === undefined ? 'no gold entered' : `${compact(gold)} gold`}
-            {goldPerDay ? ` · ${compact(goldPerDay)}/day` : ''} · {days === 1 ? '1 day' : `${days} days`} ·{' '}
+            {days === 1 ? '1 day' : `${days} days`} ·{' '}
             {modeOrder.slice(0, 2).map((m) => MODE_LABELS[m] ?? m).join(', ')} first
           </span>
         </summary>
@@ -271,26 +270,6 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             </li>
           ))}
         </ol>
-        <label>
-          Gold on hand{' '}
-          <input
-            inputMode="numeric" placeholder="optional" value={goldText} className="num-input"
-            onChange={(e) => {
-              setGoldText(e.target.value);
-              writeJson(localStorage, GOLD_KEY, e.target.value);
-            }}
-          />
-        </label>
-        <label>
-          Gold per day{' '}
-          <input
-            inputMode="numeric" placeholder="e.g. 1500000" value={incomeText} className="num-input"
-            onChange={(e) => {
-              setIncomeText(e.target.value);
-              writeJson(localStorage, INCOME_KEY, e.target.value);
-            }}
-          />
-        </label>
         <label>
           Plan{' '}
           <select
@@ -330,7 +309,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
           return (
             <p className="muted small">
               From your inventory: {ions} ion types and {modules} training module types.
-              {(!ions || !modules) && ' Press Sync if either is 0; ISO and level steps can’t be checked without them.'}
+              {!modules && ' Press Sync if modules show 0; level steps can’t be checked without them.'}{!ions && ' Type your ions in the Currencies panel so ISO-8 steps can be checked.'}
             </p>
           );
         })()}
