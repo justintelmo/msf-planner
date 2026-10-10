@@ -30,8 +30,13 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
   const num = (v: string) => (v.trim() ? Number(v) : undefined);
 
   return (
-    <article className="card mode-targets">
-      <h3>Mode targets</h3>
+    <details className="card mode-targets">
+      <summary>
+        <strong>Mode targets</strong>{' '}
+        <span className="muted small">
+          {(catalog?.raids ?? []).filter((r) => raidTarget(goals, r, catalog) >= 0).length} raids targeted · Battleworld difficulty {bw.difficulty}
+        </span>
+      </summary>
       <p className="muted small">
         The Plan treats these like unlock goals: it finds the cheapest characters to bring up to each bar and puts those
         upgrades near the top of the priority list.
@@ -112,6 +117,6 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
       {BATTLEWORLD_PRESETS[bw.difficulty] && (
         <button className="ghost small" onClick={() => setBw({ target: {} })}>Reset to the game’s difficulty {bw.difficulty} numbers</button>
       )}
-    </article>
+    </details>
   );
 }

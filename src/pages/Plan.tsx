@@ -134,6 +134,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const gold = goldText.trim() ? Number(goldText.replace(/[^\d]/g, '')) : undefined;
   const [incomeText, setIncomeText] = useState(() => readJson<string>(localStorage, INCOME_KEY) ?? '');
   const goldPerDay = incomeText.trim() ? Number(incomeText.replace(/[^\d]/g, '')) : undefined;
+  // Open until gold is entered, so the first visit shows where to type it.
+  const [settingsOpen, setSettingsOpen] = useState(() => !readJson<string>(localStorage, GOLD_KEY));
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
   const { catalog, goals } = useUnlocks();
@@ -248,6 +250,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <section className="plan">
+      <details className="card settings" open={settingsOpen} onToggle={(e) => setSettingsOpen((e.target as HTMLDetailsElement).open)}>
+        <summary>
+          <strong>Settings</strong>{' '}
+          <span className="muted small">
+            {gold === undefined ? 'no gold entered' : `${compact(gold)} gold`}
+            {goldPerDay ? ` · ${compact(goldPerDay)}/day` : ''} · {days === 1 ? '1 day' : `${days} days`} ·{' '}
+            {modeOrder.slice(0, 2).map((m) => MODE_LABELS[m] ?? m).join(', ')} first
+          </span>
+        </summary>
       <div className="toolbar">
         <span>Mode priority</span>
         <ol className="modes">
@@ -255,7 +266,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             <li key={m}>
               {i + 1}. {MODE_LABELS[m] ?? m}
               {i > 0 && (
-                <button className="ghost small" title="Move up" onClick={() => moveUp(i)}>↑</button>
+                <button className="ghost small" aria-label={`Move ${MODE_LABELS[m] ?? m} up`} title="Move up" onClick={() => moveUp(i)}>↑</button>
               )}
             </li>
           ))}
@@ -263,7 +274,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <label>
           Gold on hand{' '}
           <input
-            inputMode="numeric" placeholder="optional" value={goldText} style={{ width: 140 }}
+            inputMode="numeric" placeholder="optional" value={goldText} className="num-input"
             onChange={(e) => {
               setGoldText(e.target.value);
               writeJson(localStorage, GOLD_KEY, e.target.value);
@@ -273,7 +284,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <label>
           Gold per day{' '}
           <input
-            inputMode="numeric" placeholder="e.g. 1500000" value={incomeText} style={{ width: 120 }}
+            inputMode="numeric" placeholder="e.g. 1500000" value={incomeText} className="num-input"
             onChange={(e) => {
               setIncomeText(e.target.value);
               writeJson(localStorage, INCOME_KEY, e.target.value);
@@ -292,49 +303,60 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             {[1, 3, 7, 14, 30].map((d) => <option key={d} value={d}>{d === 1 ? '1 day' : `${d} days`}</option>)}
           </select>
         </label>
-        {remaining > 0 && <span className="muted small">Reading gear and abilities for {remaining} characters…</span>}
-        {recipesLeft > 0 && <span className="muted small">Reading crafting recipes for {recipesLeft} gear pieces…</span>}
       </div>
-      {goals.length > 0 && (
-        <p className="small">
-          <strong>Unlock goals come first:</strong> {goals.map((g) => names.get(g) ?? g).join(', ')}.{' '}
-          {Object.keys(targets).length
-            ? `${Object.keys(targets).length} characters need upgrades to meet their requirements.`
-            : catalog ? 'Your roster already meets their requirements.' : 'Load unlock content on the Goals tab to plan for them.'}
-        </p>
-      )}
-      <p className="muted small">
-        After that, characters are ranked by your saved squads in each mode (weighted by the order above), recommended teams for
-        unlock content like {CONTENT_TEAMS[0]?.content}, live events, and how many unlock events and Dark Dimensions their
-        traits fit. A character useful in several places outranks one built for a single mode.
-      </p>
-      {snapshot.source === 'live' && (() => {
-        const ids = snapshot.inventory.map((i) => idOf(i.item) ?? '');
-        const ions = ids.filter((id) => id.startsWith('ISO8-TIER-') && id.endsWith('-CURRENCY')).length;
-        const moduleIds = new Set((snapshot.upgrades?.characterXpCosts ?? []).flatMap((w) => w.cost.map((c) => c.item)));
-        const modules = ids.filter((id) => moduleIds.has(id)).length;
-        return (
-          <p className="muted small">
-            From your inventory: {ions} ion types and {modules} training module types.
-            {(!ions || !modules) && ' Press Sync if either is 0; ISO and level steps can’t be checked without them.'}
+      </details>
+      {remaining > 0 && <p className="muted small" role="status">Reading gear and abilities for {remaining} characters…</p>}
+      {recipesLeft > 0 && <p className="muted small" role="status">Reading crafting recipes for {recipesLeft} gear pieces…</p>}
+      <details className="explain small">
+        <summary>How the plan is ranked</summary>
+        {goals.length > 0 && (
+          <p className="small">
+            <strong>Unlock goals come first:</strong> {goals.map((g) => names.get(g) ?? g).join(', ')}.{' '}
+            {Object.keys(targets).length
+              ? `${Object.keys(targets).length} characters need upgrades to meet their requirements.`
+              : catalog ? 'Your roster already meets their requirements.' : 'Load unlock content on the Goals tab to plan for them.'}
           </p>
-        );
-      })()}
-      {(() => {
-        const missing = [...new Set(CONTENT_TEAMS.flatMap((t) => resolveTeam(t, owned).missing))];
-        return missing.length ? (
-          <details className="small muted">
-            <summary>{missing.length} recommended characters or traits didn’t match your roster</summary>
-            {missing.join(', ')}. They’re either not in the game data under that name, or the name needs fixing.
-          </details>
-        ) : null;
-      })()}
+        )}
+        <p className="muted small">
+          After that, characters are ranked by your saved squads in each mode (weighted by the order above), recommended teams for
+          unlock content like {CONTENT_TEAMS[0]?.content}, live events, and how many unlock events and Dark Dimensions their
+          traits fit. A character useful in several places outranks one built for a single mode.
+        </p>
+        {snapshot.source === 'live' && (() => {
+          const ids = snapshot.inventory.map((i) => idOf(i.item) ?? '');
+          const ions = ids.filter((id) => id.startsWith('ISO8-TIER-') && id.endsWith('-CURRENCY')).length;
+          const moduleIds = new Set((snapshot.upgrades?.characterXpCosts ?? []).flatMap((w) => w.cost.map((c) => c.item)));
+          const modules = ids.filter((id) => moduleIds.has(id)).length;
+          return (
+            <p className="muted small">
+              From your inventory: {ions} ion types and {modules} training module types.
+              {(!ions || !modules) && ' Press Sync if either is 0; ISO and level steps can’t be checked without them.'}
+            </p>
+          );
+        })()}
+        {(() => {
+          const missing = [...new Set(CONTENT_TEAMS.flatMap((t) => resolveTeam(t, owned).missing))];
+          return missing.length ? (
+            <details className="small muted">
+              <summary>{missing.length} recommended characters or traits didn’t match your roster</summary>
+              {missing.join(', ')}. They’re either not in the game data under that name, or the name needs fixing.
+            </details>
+          ) : null;
+        })()}
+      </details>
       {!snapshot.squads && (
         <p className="muted small">Your saved squads haven’t loaded yet. Press Sync to include them.</p>
       )}
       {snapshot.plannerErrors?.map((e) => (
         <p key={e} className="error small">Couldn’t load {e}</p>
       ))}
+
+      <nav className="jump" aria-label="Plan sections">
+        {reports.length > 0 && catalog && <a href="#goals">Goals</a>}
+        <a href="#priority">Priority list</a>
+        {schedule.blocked.length > 0 && <a href="#farm">Farm next</a>}
+        <a href="#characters">By character</a>
+      </nav>
 
       <div className="tiles">
         <Tile label="Steps in the list" value={String(schedule.steps.length)} />
@@ -347,7 +369,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
       {reports.length > 0 && catalog && (
         <>
-          <h2>Unlock goals and mode targets</h2>
+          <h2 id="goals">Unlock goals and mode targets</h2>
           <p className="muted small">
             Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
             means the cost uses something the API doesn’t report, like ions.
@@ -372,7 +394,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </>
       )}
 
-      <h2>Priority list</h2>
+      <h2 id="priority">Priority list</h2>
       <p className="muted small">
         Levels, abilities, gear, stars and ISO-8 across your roster, best value for the gold first. Unlock-goal thresholds
         count triple; characters that fit many modes, events and goals rank higher. Gear is crafted from your materials
@@ -409,7 +431,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
       {schedule.blocked.length > 0 && (
         <>
-          <h2>Farm next</h2>
+          <h2 id="farm">Farm next</h2>
           <p className="muted small">
             The most valuable steps waiting on materials. Training modules, gear materials and shards for these come first.
           </p>
@@ -429,7 +451,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </>
       )}
 
-      <h2>By character, highest priority first</h2>
+      <h2 id="characters">By character, highest priority first</h2>
       <div className="squads">
         {withSteps.slice(0, shownChars).map(({ character, steps }) => {
           const rank = reasonsOf.get(character.info.id);

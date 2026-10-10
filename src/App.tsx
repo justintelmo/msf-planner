@@ -12,6 +12,16 @@ import Login from './pages/Login';
 import Plan from './pages/Plan';
 import Roster from './pages/Roster';
 
+/** Short labels are shown in the phone tab bar. */
+const TABS: { to: string; label: string; short?: string }[] = [
+  { to: '/goals', label: 'Goals' },
+  { to: '/plan', label: 'Plan' },
+  { to: '/roster', label: 'Roster' },
+  { to: '/events', label: 'Events' },
+  { to: '/dd', label: 'Dark Dimension', short: 'DD' },
+  { to: '/explore', label: 'API' },
+];
+
 export default function App() {
   useAutoSync();
   const { mode, snapshot, loading, error } = useStore();
@@ -30,17 +40,17 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <strong className="brand">MSF Planner</strong>
-        <nav>
-          <NavLink to="/goals">Goals</NavLink>
-          <NavLink to="/plan">Plan</NavLink>
-          <NavLink to="/roster">Roster</NavLink>
-          <NavLink to="/events">Events</NavLink>
-          <NavLink to="/dd">Dark Dimension</NavLink>
-          <NavLink to="/explore">API</NavLink>
+        <nav className="tabs" aria-label="Main">
+          {TABS.map((t) => (
+            <NavLink key={t.to} to={t.to}>
+              <span className="tab-long">{t.label}</span>
+              <span className="tab-short" aria-hidden="true">{t.short ?? t.label}</span>
+            </NavLink>
+          ))}
         </nav>
         <div className="account">
           {snapshot && (
-            <span className="muted">
+            <span className="muted who" title={`Synced ${new Date(snapshot.syncedAt).toLocaleString()}`}>
               {plainName(snapshot.card.name)}
               {snapshot.source === 'demo' && ' (demo data)'} · synced {new Date(snapshot.syncedAt).toLocaleTimeString()}
             </span>
