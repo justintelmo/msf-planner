@@ -5,6 +5,7 @@ import { readJson, writeJson } from '../auth/storage';
 import { plainName } from '../planner/export';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
+import { wantRaidDetail } from './modeGoals';
 import {
   distinctRequirements, fromDarkDimension, fromEpisodic, prerequisiteIds, type ShardIndex, type UnlockSource,
 } from '../planner/unlocks';
@@ -107,10 +108,20 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
   const raidList = await msfApi.raids().catch((e) => (note('Raids', e), []));
   const groups = await msfApi.raidGroups().catch(() => []);
   const raidGroups = Object.fromEntries(groups.map((g) => [g.id, plainName(g.name ?? g.id)]));
-  for (let i = 0; i < raidList.length; i += 4) {
-    set({ progress: `Reading raids (${Math.min(i + 4, raidList.length)} of ${raidList.length})…` });
+  // Rooms and difficulties are only read for raids that get planned: the newest of each
+  // type, plus any the player picked. The rest keep their name so they can be picked later.
+  const listed: RaidSource[] = raidList.map((r) => ({
+    id: r.id, name: plainName(r.name ?? r.id), subName: plainName(r.subName), groupId: r.groupId,
+    teams: r.teams, maxDifficulty: r.maxDifficulty, difficulties: {}, rooms: [],
+  }));
+  const shell: Catalog = { loadedAt: 0, sources: [], raids: listed, raidGroups, errors: [] };
+  const wanted = raidList.filter((_, i) => wantRaidDetail(listed[i], shell));
+  const detailed = new Set(wanted.map((r) => r.id));
+  raids.push(...listed.filter((r) => !detailed.has(r.id)));
+  for (let i = 0; i < wanted.length; i += 2) {
+    set({ progress: `Reading raids (${Math.min(i + 2, wanted.length)} of ${wanted.length})…` });
     const batch = await Promise.all(
-      raidList.slice(i, i + 4).map((r) => msfApi.raid(r.id, r.maxDifficulty).catch((e) => (note(r.name ?? r.id, e), undefined))),
+      wanted.slice(i, i + 2).map((r) => msfApi.raid(r.id, r.maxDifficulty).catch((e) => (note(r.name ?? r.id, e), undefined))),
     );
     for (const r of batch) {
       if (!r) continue;

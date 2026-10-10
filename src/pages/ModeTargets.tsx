@@ -73,6 +73,7 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
                         ))}
                       </select>
                       {diff?.recommendations && <span className="muted"> · {diff.recommendations}</span>}
+                      {value >= 0 && r.rooms.length === 0 && <span className="warn"> · press refresh above to read its rooms</span>}
                     </li>
                   );
                 })}

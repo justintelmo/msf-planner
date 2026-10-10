@@ -36,6 +36,41 @@ export class ApiError extends Error {
   }
 }
 
+/** At most this many requests in flight; bursts beyond it get throttled by the API. */
+const MAX_IN_FLIGHT = 3;
+/** Waits after a network failure or 429/503, doubling each time. */
+const RETRY_DELAYS_MS = [1000, 3000, 8000];
+let inFlight = 0;
+const waiting: (() => void)[] = [];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Runs a request when a slot is free, retrying network failures ("Failed to fetch",
+ * which is how a throttled response without CORS headers shows up) and 429/503.
+ */
+async function paced(request: () => Promise<Response>): Promise<Response> {
+  if (inFlight >= MAX_IN_FLIGHT) await new Promise<void>((r) => waiting.push(r));
+  inFlight++;
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await request();
+        if ((res.status === 429 || res.status === 503) && attempt < RETRY_DELAYS_MS.length) {
+          await sleep(RETRY_DELAYS_MS[attempt]);
+          continue;
+        }
+        return res;
+      } catch (e) {
+        if (attempt >= RETRY_DELAYS_MS.length) throw e;
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
+    }
+  } finally {
+    inFlight--;
+    waiting.shift()?.();
+  }
+}
+
 async function get<T>(path: string, params: Record<string, string> = {}): Promise<ApiResponse<T>> {
   const url = new URL(MSF_CONFIG.apiBaseUrl + path);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -43,7 +78,7 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
   const token = await accessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, { headers });
+  const res = await paced(() => fetch(url, { headers }));
   if (res.status === 401) logout();
   if (!res.ok) throw new ApiError(res.status, `${path} failed (${res.status})`);
   return (await res.json()) as ApiResponse<T>;

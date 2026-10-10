@@ -175,3 +175,8 @@ export function modeReports(goals: ModeGoals, catalog: Catalog | null, roster: O
   }
   return reports;
 }
+
+/** Raids worth reading in full: the ones the current targets would plan for. */
+export function wantRaidDetail(raid: RaidSource, catalog: Catalog): boolean {
+  return raidTarget(state, raid, catalog) >= 0;
+}
