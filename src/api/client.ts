@@ -232,12 +232,51 @@ export const msfApi = {
   async raids(): Promise<RaidInfo[]> {
     return (await getPaged<RaidInfo>('/game/v1/raids', { itemFormat: 'id', traitFormat: 'id', raidInfo: 'full' })).data;
   },
-  /** A raid's rooms with their requirements, and every difficulty's entry requirements. */
-  async raid(raidId: string): Promise<RaidInfo> {
-    return (await get<RaidInfo>(`/game/v1/raids/${encodeURIComponent(raidId)}`, {
-      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'none',
-      raidRewards: 'none', raidInfo: 'full', raidMap: 'full', raidDiffs: 'full', nodeCombat: 'none', pieceInfo: 'none',
-    })).data;
+  /**
+   * A raid's rooms with their requirements, and every difficulty's entry requirements.
+   * Big raids answer 472 (too large) to one combined call, so they're read in pieces:
+   * difficulties, then the room map, then each room on its own.
+   */
+  async raid(raidId: string, maxDifficulty?: number): Promise<RaidInfo> {
+    const path = `/game/v1/raids/${encodeURIComponent(raidId)}`;
+    const base = { itemFormat: 'id', traitFormat: 'id', statsFormat: 'csv', pieceInfo: 'none', nodeCombat: 'none', nodeRewards: 'none', raidRewards: 'none' };
+    try {
+      return (await get<RaidInfo>(path, { ...base, nodeInfo: 'part', nodeReqs: 'full', raidInfo: 'full', raidMap: 'full', raidDiffs: 'full' })).data;
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 472) throw e;
+    }
+    // General info and difficulties, without the map.
+    const info = await get<RaidInfo>(path, { ...base, nodeInfo: 'none', nodeReqs: 'none', raidInfo: 'full', raidMap: 'none', raidDiffs: 'full' })
+      .then((r) => r.data)
+      .catch(async (e) => {
+        if (!(e instanceof ApiError) || e.status !== 472) throw e;
+        // Still too big: one difficulty at a time.
+        const head = (await get<RaidInfo>(path, { ...base, nodeInfo: 'none', nodeReqs: 'none', raidInfo: 'full', raidMap: 'none', raidDiffs: 'none' })).data;
+        const top = head.maxDifficulty ?? maxDifficulty ?? 0;
+        const difficulties: RaidInfo['difficulties'] = {};
+        for (let d = 1; d <= top; d++) {
+          const one = await get<RaidInfo>(path, { ...base, nodeInfo: 'none', nodeReqs: 'none', raidInfo: 'none', raidMap: 'none', raidDiffs: 'full', difficulty: String(d) })
+            .then((r) => r.data)
+            .catch(() => undefined);
+          Object.assign(difficulties, one?.difficulties ?? {});
+        }
+        return { ...head, difficulties };
+      });
+    // Room layout, then each room's requirements.
+    const map = (await get<RaidInfo>(path, { ...base, nodeInfo: 'none', nodeReqs: 'none', raidInfo: 'none', raidMap: 'full', raidDiffs: 'none' })).data;
+    const roomIds = [...new Set([...(map.rays ?? []).flat().filter(Boolean), ...Object.keys(map.rooms ?? {})])];
+    const rooms: Record<string, NodeInfo> = {};
+    for (let i = 0; i < roomIds.length; i += 4) {
+      const batch = await Promise.all(
+        roomIds.slice(i, i + 4).map((room) =>
+          get<NodeInfo>(`${path}/${encodeURIComponent(room)}`, { ...base, nodeInfo: 'part', nodeReqs: 'full' })
+            .then((r) => r.data)
+            .catch(() => undefined),
+        ),
+      );
+      batch.forEach((node, j) => node && (rooms[roomIds[i + j]] = node));
+    }
+    return { ...info, id: raidId, rays: map.rays, startingRoomId: map.startingRoomId, rooms };
   },
   async episodics(type: string): Promise<EpisodicInfo[]> {
     return (await getPaged<EpisodicInfo>(`/game/v1/episodics/${encodeURIComponent(type)}`, { itemFormat: 'id', traitFormat: 'id' })).data;

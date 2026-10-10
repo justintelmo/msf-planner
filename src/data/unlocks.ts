@@ -104,7 +104,7 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
   for (let i = 0; i < raidList.length; i += 4) {
     set({ progress: `Reading raids (${Math.min(i + 4, raidList.length)} of ${raidList.length})…` });
     const batch = await Promise.all(
-      raidList.slice(i, i + 4).map((r) => msfApi.raid(r.id).catch((e) => (note(r.name ?? r.id, e), undefined))),
+      raidList.slice(i, i + 4).map((r) => msfApi.raid(r.id, r.maxDifficulty).catch((e) => (note(r.name ?? r.id, e), undefined))),
     );
     for (const r of batch) {
       if (!r) continue;
