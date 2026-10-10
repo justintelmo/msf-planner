@@ -99,11 +99,33 @@ function eventReasons(c: OwnedCharacter, events: EventInfo[], weights: Record<st
   return reasons;
 }
 
-function resolveTeam(team: ContentTeam, owned: OwnedCharacter[]): OwnedCharacter[] {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return team.characters
-    .map((key) => owned.find((c) => c.info.id === key) ?? owned.find((c) => norm(c.info.name ?? '') === norm(key)))
-    .filter((c): c is OwnedCharacter => !!c);
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+
+/** Matches a curated name to a character by id, display name, or the name without its "(Variant)" suffix. */
+function findCharacter(key: string, owned: OwnedCharacter[]): OwnedCharacter | undefined {
+  const k = norm(key);
+  return (
+    owned.find((c) => c.info.id === key) ??
+    owned.find((c) => norm(c.info.id) === k || norm(c.info.name ?? '') === k)
+  );
+}
+
+function hasTrait(c: OwnedCharacter, trait: string): boolean {
+  const t = norm(trait);
+  return [...(c.info.traits ?? []), ...(c.info.invisibleTraits ?? [])]
+    .map((x) => (typeof x === 'string' ? x : x?.id ?? ''))
+    .some((x) => norm(x) === t);
+}
+
+export function resolveTeam(team: ContentTeam, owned: OwnedCharacter[]): { found: OwnedCharacter[]; missing: string[] } {
+  const named = team.characters.map((key) => ({ key, c: findCharacter(key, owned) }));
+  const byTrait = (team.traits ?? []).flatMap((t) => owned.filter((c) => isUnlocked(c) && hasTrait(c, t)));
+  const found = [...new Set([...named.flatMap((n) => (n.c ? [n.c] : [])), ...byTrait])];
+  const missing = [
+    ...named.filter((n) => !n.c).map((n) => n.key),
+    ...(team.traits ?? []).filter((t) => !owned.some((c) => hasTrait(c, t))).map((t) => `${t} (trait)`),
+  ];
+  return { found, missing };
 }
 
 /**
@@ -122,7 +144,7 @@ export function rankCharacters(input: RankInput): Ranked[] {
     ids.forEach((id) => add(id, { label: `${MODE_LABELS[mode] ?? mode} squad`, weight: weights[mode] }));
   }
   for (const team of input.contentTeams) {
-    resolveTeam(team, input.owned).forEach((c) =>
+    resolveTeam(team, input.owned).found.forEach((c) =>
       add(c.info.id, { label: `${team.content}: ${team.team}`, weight: CONTENT_WEIGHT }),
     );
   }

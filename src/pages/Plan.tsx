@@ -13,7 +13,7 @@ import { modeReports, useModeGoals } from '../data/modeGoals';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
-import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, withAllModes } from '../planner/priority';
+import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
 const GOLD_KEY = 'msf.plan.gold';
@@ -276,6 +276,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             {(!ions || !modules) && ' Press Sync if either is 0; ISO and level steps can’t be checked without them.'}
           </p>
         );
+      })()}
+      {(() => {
+        const missing = [...new Set(CONTENT_TEAMS.flatMap((t) => resolveTeam(t, owned).missing))];
+        return missing.length ? (
+          <details className="small muted">
+            <summary>{missing.length} recommended characters or traits didn’t match your roster</summary>
+            {missing.join(', ')}. They’re either not in the game data under that name, or the name needs fixing.
+          </details>
+        ) : null;
       })()}
       {!snapshot.squads && (
         <p className="muted small">Your saved squads haven’t loaded yet. Press Sync to include them.</p>
