@@ -177,3 +177,6 @@ details > summary { cursor: pointer; }
   .plan h2, .goals h2 { font-size: 16px; }
 }
 .toggle { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; min-height: 44px; }
+.review { margin-bottom: 12px; }
+.review[open] > summary { margin-bottom: 8px; }
+.review-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }

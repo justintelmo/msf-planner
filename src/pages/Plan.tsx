@@ -12,6 +12,7 @@ import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { isMetRaid, modeReports, useModeGoals } from '../data/modeGoals';
 import { GOLD_ID, useWallet } from '../data/wallet';
 import Currencies, { withTypedAmounts } from './Currencies';
+import SyncReview from './SyncReview';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
@@ -264,6 +265,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <section className="plan">
+      <SyncReview
+        snapshot={snapshot} owned={owned} ranked={ranked} targets={targets} nameOf={nameOf}
+        targetsFor={(o) => goalTargets([...goalReports(goals, catalog, o), ...modeReports(modeGoals, catalog, o, snapshot.squads ?? {})], nameOf)}
+      />
       <Currencies inventory={snapshot.inventory} upgrades={snapshot.upgrades ?? SAMPLE_UPGRADES} label={label} />
       <details className="card settings" open={settingsOpen} onToggle={(e) => setSettingsOpen((e.target as HTMLDetailsElement).open)}>
         <summary>

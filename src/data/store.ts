@@ -3,6 +3,7 @@ import { msfApi } from '../api/client';
 import type { CharacterInfo, CharacterInstance, EventInfo, ItemQuantity, PlayerCard, Squads, UpgradeTables } from '../api/types';
 import { isLoggedIn, onAuthChange } from '../auth/auth';
 import { readJson, writeJson } from '../auth/storage';
+import { readHistory, recordSync } from './syncHistory';
 import { SAMPLE_CARD, SAMPLE_CHARACTERS, SAMPLE_EVENTS, SAMPLE_INVENTORY, SAMPLE_ROSTER, SAMPLE_SQUADS, SAMPLE_UPGRADES } from './sample';
 
 export interface Snapshot {
@@ -43,6 +44,9 @@ let state: State = {
   error: null,
 };
 const listeners = new Set<() => void>();
+
+// The first time this runs with a cached snapshot, that snapshot becomes the baseline the next sync is compared to.
+if (state.snapshot && !readHistory().length) recordSync(state.snapshot);
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
@@ -105,6 +109,7 @@ export async function sync(): Promise<void> {
       };
     }
     writeJson(localStorage, SNAPSHOT_KEY, snapshot);
+    recordSync(snapshot);
     set({ snapshot, loading: false });
   } catch (e) {
     set({ loading: false, error: e instanceof Error ? e.message : String(e) });
