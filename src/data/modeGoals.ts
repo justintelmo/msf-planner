@@ -75,6 +75,23 @@ export function raidAt(raid: RaidSource, difficulty: number): UnlockSource {
   return { kind: 'Raid', id: raid.id, name: raid.name, subName: raid.subName, nodes, rewards: [] };
 }
 
+/**
+ * Minimum power recommendations per Battleworld difficulty, from the in-game difficulty
+ * select screen (2026-10-10). Diamonds sit above 7 red stars (activeRed 8 = 1 diamond);
+ * ISO-8 tier 3 level 5 is class level 15.
+ */
+export const BATTLEWORLD_PRESETS: Record<number, Target> = {
+  6: { level: 105, gearTier: 20, activeYellow: 7, activeRed: 10, iso8ClassLevel: 15 },
+  7: { level: 108, gearTier: 20, activeYellow: 7, activeRed: 10, iso8ClassLevel: 15 },
+  8: { level: 110, gearTier: 20, activeYellow: 7, activeRed: 11, iso8ClassLevel: 15 },
+  9: { level: 110, gearTier: 20, activeYellow: 7, activeRed: 12, iso8ClassLevel: 15 },
+};
+
+/** Typed-in thresholds win; otherwise the difficulty's known recommendation. */
+export function battleworldTarget(bw: NonNullable<ModeGoals['battleworld']>): Target {
+  return Object.values(bw.target).some(Boolean) ? bw.target : (BATTLEWORLD_PRESETS[bw.difficulty] ?? {});
+}
+
 export function raidTarget(goals: ModeGoals, raid: RaidSource): number {
   return goals.raids?.[raid.id] ?? raid.maxDifficulty ?? 0;
 }
@@ -98,12 +115,13 @@ export function modeReports(goals: ModeGoals, catalog: Catalog | null, roster: O
     });
   }
   const bw = goals.battleworld;
-  if (bw && Object.values(bw.target).some(Boolean)) {
+  const bwTarget = bw ? battleworldTarget(bw) : {};
+  if (bw && Object.values(bwTarget).some(Boolean)) {
     // Saved Battleworld squads have to meet the bar; the rest of the count is filled from the roster.
     const saved = [...new Set((squads.battleworld ?? []).flat().filter(Boolean))];
     const requirements: Requirements = {
       minCharacters: bw.characters,
-      anyCharacterFilters: [bw.target as CharacterFilter],
+      anyCharacterFilters: [bwTarget as CharacterFilter],
       specificCharacters: saved.length ? saved : undefined,
       description: `Battleworld difficulty ${bw.difficulty}`,
     };

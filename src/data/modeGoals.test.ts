@@ -42,6 +42,11 @@ describe('mode targets', () => {
     expect(picks).toHaveLength(2);
   });
 
+  it('uses the game’s difficulty 7 numbers when nothing is typed in', () => {
+    const [bw] = modeReports({ raids: {}, battleworld: { difficulty: 7, characters: 1, target: {} } }, null, [c('A', [], 19)], {});
+    expect(bw.sources[0].checks[0].plan.picks[0].gap).toMatchObject({ level: 108, gearTier: 20, activeRed: 10, iso8ClassLevel: 15 });
+  });
+
   it('slots Battleworld into an older saved mode order', () => {
     expect(withAllModes(['war', 'raids', 'crucible', 'blitz'])).toEqual(['war', 'raids', 'battleworld', 'crucible', 'blitz']);
   });

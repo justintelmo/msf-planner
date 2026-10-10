@@ -1,12 +1,12 @@
 import type { Target } from '../planner/gaps';
-import { difficultyName, raidTarget, setModeGoals, useModeGoals } from '../data/modeGoals';
+import { BATTLEWORLD_PRESETS, battleworldTarget, difficultyName, raidTarget, setModeGoals, useModeGoals } from '../data/modeGoals';
 import type { Catalog } from '../data/unlocks';
 
 const BW_FIELDS: { key: keyof Target; label: string }[] = [
   { key: 'gearTier', label: 'Gear tier' },
   { key: 'level', label: 'Level' },
   { key: 'activeYellow', label: 'Yellow stars' },
-  { key: 'activeRed', label: 'Red stars' },
+  { key: 'activeRed', label: 'Red stars (8+ = diamonds)' },
   { key: 'iso8ClassLevel', label: 'ISO-8 class level' },
 ];
 
@@ -57,13 +57,14 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
 
       <h4>Battleworld</h4>
       <p className="muted small">
-        Battleworld isn’t in the API. Enter what your alliance difficulty asks for from the in-game screen. Your saved
-        Battleworld squads must all meet it; the rest of the count is filled with your cheapest characters to upgrade.
+        Battleworld isn’t in the API. Difficulties 6 to 9 use the game’s minimum power recommendations (red stars 10 = 3
+        diamonds, ISO-8 15 = tier 3 level 5); type a number to override one. Your saved Battleworld squads must all meet
+        it; the rest of the count is filled with your cheapest characters to upgrade.
       </p>
       <div className="bw-form small">
         <label>
           Difficulty{' '}
-          <input type="number" min={1} value={bw.difficulty} style={{ width: 60 }} onChange={(e) => setBw({ difficulty: Number(e.target.value) || 1 })} />
+          <input type="number" min={1} value={bw.difficulty} style={{ width: 60 }} onChange={(e) => setBw({ difficulty: Number(e.target.value) || 1, target: {} })} />
         </label>
         <label>
           Characters needed{' '}
@@ -74,12 +75,15 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
             {f.label}{' '}
             <input
               type="number" min={0} placeholder="any" style={{ width: 70 }}
-              value={(bw.target[f.key] as number | undefined) ?? ''}
-              onChange={(e) => setBw({ target: { ...bw.target, [f.key]: num(e.target.value) } })}
+              value={(battleworldTarget(bw)[f.key] as number | undefined) ?? ''}
+              onChange={(e) => setBw({ target: { ...battleworldTarget(bw), [f.key]: num(e.target.value) } })}
             />
           </label>
         ))}
       </div>
+      {BATTLEWORLD_PRESETS[bw.difficulty] && (
+        <button className="ghost small" onClick={() => setBw({ target: {} })}>Reset to the game’s difficulty {bw.difficulty} numbers</button>
+      )}
     </article>
   );
 }
