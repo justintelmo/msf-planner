@@ -13,6 +13,7 @@ import {
   type CharacterInfo,
   type DarkDimension,
   type EpisodicInfo,
+  type RaidInfo,
   type NodeInfo,
   type CharacterInstance,
   type EventInfo,
@@ -226,6 +227,16 @@ export const msfApi = {
     return (await get<DarkDimension>(`/game/v1/dds/${encodeURIComponent(ddId)}`, {
       itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'full',
       raidRewards: 'full', raidInfo: 'full', raidMap: 'full', nodeCombat: 'none', pieceInfo: 'none',
+    })).data;
+  },
+  async raids(): Promise<RaidInfo[]> {
+    return (await getPaged<RaidInfo>('/game/v1/raids', { itemFormat: 'id', traitFormat: 'id', raidInfo: 'full' })).data;
+  },
+  /** A raid's rooms with their requirements, and every difficulty's entry requirements. */
+  async raid(raidId: string): Promise<RaidInfo> {
+    return (await get<RaidInfo>(`/game/v1/raids/${encodeURIComponent(raidId)}`, {
+      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'none',
+      raidRewards: 'none', raidInfo: 'full', raidMap: 'full', raidDiffs: 'full', nodeCombat: 'none', pieceInfo: 'none',
     })).data;
   },
   async episodics(type: string): Promise<EpisodicInfo[]> {

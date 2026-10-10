@@ -6,9 +6,20 @@ export const MODE_LABELS: Record<string, string> = {
   raids: 'Raids', war: 'War', crucible: 'Crucible', blitz: 'Blitz', arena: 'Arena', tower: 'Tower',
   battleworld: 'Battleworld', roster: 'Roster',
 };
-export const DEFAULT_MODE_ORDER = ['raids', 'war', 'crucible', 'blitz'];
+export const DEFAULT_MODE_ORDER = ['raids', 'battleworld', 'war', 'crucible', 'blitz'];
 
-/** Weight of the mode at each position in the player's order: 40, 30, 20, 10. */
+/** Adds modes a saved order predates, each after the mode it follows by default. */
+export function withAllModes(saved: string[]): string[] {
+  const out = saved.filter((m) => DEFAULT_MODE_ORDER.includes(m));
+  DEFAULT_MODE_ORDER.forEach((m, i) => {
+    if (out.includes(m)) return;
+    const after = out.indexOf(DEFAULT_MODE_ORDER[i - 1]);
+    out.splice(after + 1, 0, m);
+  });
+  return out;
+}
+
+/** Weight of the mode at each position in the player's order: 10 per place from the bottom. */
 export function modeWeights(order: string[]): Record<string, number> {
   return Object.fromEntries(order.map((m, i) => [m, (order.length - i) * 10]));
 }

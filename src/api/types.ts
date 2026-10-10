@@ -229,6 +229,23 @@ export interface DarkDimension {
   nodeRewards?: unknown;
 }
 
+export interface RaidDifficulty {
+  name?: string;
+  /** (localized) Suggested power or teams for this difficulty. */
+  recommendations?: string;
+  requirements?: Requirements;
+  /** Percent of the previous difficulty that must be cleared first. */
+  difficultyUnlock?: number;
+}
+
+/** A raid: rooms laid out like a Dark Dimension, plus numbered difficulties above normal. */
+export interface RaidInfo extends DarkDimension {
+  groupId?: string;
+  teams?: number;
+  maxDifficulty?: number;
+  difficulties?: Record<string, RaidDifficulty>;
+}
+
 export interface EpisodicInfo {
   id: string;
   nodeName?: string;

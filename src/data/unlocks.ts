@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { msfApi } from '../api/client';
-import { idOf, type CharacterFilter, type CharacterInfo, type Requirements } from '../api/types';
+import { idOf, type CharacterFilter, type CharacterInfo, type RaidDifficulty, type Requirements } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
@@ -21,9 +21,21 @@ export const EPISODIC_TYPES: Record<string, string> = {
   flashEvent: 'Flash event',
 };
 
+export interface RaidSource {
+  id: string;
+  name: string;
+  subName?: string;
+  teams?: number;
+  maxDifficulty?: number;
+  difficulties: Record<string, RaidDifficulty>;
+  rooms: UnlockSource['nodes'];
+}
+
 export interface Catalog {
   loadedAt: number;
   sources: UnlockSource[];
+  /** Missing in catalogs loaded before raids were read. */
+  raids?: RaidSource[];
   errors: string[];
 }
 
@@ -86,6 +98,23 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
     const full = await msfApi.darkDimensionUnlocks(dd.id).catch((e) => (note(dd.name ?? dd.id, e), undefined));
     if (full) sources.push(fromDarkDimension(full, shards));
   }
+  set({ progress: 'Reading raids…' });
+  const raids: RaidSource[] = [];
+  const raidList = await msfApi.raids().catch((e) => (note('Raids', e), []));
+  for (let i = 0; i < raidList.length; i += 4) {
+    set({ progress: `Reading raids (${Math.min(i + 4, raidList.length)} of ${raidList.length})…` });
+    const batch = await Promise.all(
+      raidList.slice(i, i + 4).map((r) => msfApi.raid(r.id).catch((e) => (note(r.name ?? r.id, e), undefined))),
+    );
+    for (const r of batch) {
+      if (!r) continue;
+      const asDd = fromDarkDimension(r, shards);
+      raids.push({
+        id: r.id, name: asDd.name, subName: asDd.subName, teams: r.teams, maxDifficulty: r.maxDifficulty,
+        difficulties: r.difficulties ?? {}, rooms: asDd.nodes,
+      });
+    }
+  }
   for (const [type, label] of Object.entries(EPISODIC_TYPES)) {
     set({ progress: `Reading ${label.toLowerCase()}s…` });
     const list = await msfApi.episodics(type).catch((e) => (note(label, e), []));
@@ -97,7 +126,7 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
       batch.forEach((ep) => ep && sources.push(fromEpisodic(label, ep, shards)));
     }
   }
-  const catalog = { loadedAt: Date.now(), sources, errors };
+  const catalog = { loadedAt: Date.now(), sources, raids, errors };
   writeJson(localStorage, CATALOG_KEY, catalog);
   set({ catalog, progress: null });
 }
@@ -117,6 +146,8 @@ export interface GoalSourceReport {
 
 export interface GoalReport {
   characterId: string;
+  /** Display name when the goal isn't a character, e.g. a raid difficulty. */
+  label?: string;
   sources: GoalSourceReport[];
 }
 
@@ -166,10 +197,10 @@ export function goalTargets(reports: GoalReport[], nameOf: (id: string) => strin
           if (!Object.keys(pick.gap).length) continue;
           const id = pick.character.info.id;
           const prev = out[id];
-          const why = `For ${nameOf(r.characterId)}`;
+          const why = `For ${(r.label ?? nameOf(r.characterId))}`;
           out[id] = {
             target: prev ? mergeTargets(prev.target, pick.gap) : pick.gap,
-            why: prev && !prev.why.includes(nameOf(r.characterId)) ? `${prev.why}, ${nameOf(r.characterId)}` : prev?.why ?? why,
+            why: prev && !prev.why.includes((r.label ?? nameOf(r.characterId))) ? `${prev.why}, ${(r.label ?? nameOf(r.characterId))}` : prev?.why ?? why,
           };
         }
       }
@@ -191,7 +222,7 @@ export function goalPicks(reports: GoalReport[], nameOf: (id: string) => string)
   const out: Record<string, string[]> = {};
   for (const r of reports) {
     const ids = new Set(r.sources.flatMap((s) => s.checks.flatMap((c) => c.plan.picks.map((p) => p.character.info.id))));
-    ids.forEach((id) => (out[id] = [...(out[id] ?? []), nameOf(r.characterId)]));
+    ids.forEach((id) => (out[id] = [...(out[id] ?? []), (r.label ?? nameOf(r.characterId))]));
   }
   return out;
 }

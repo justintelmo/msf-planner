@@ -5,6 +5,7 @@ import { plainName } from '../planner/export';
 import { describeGap } from '../planner/gaps';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
+import ModeTargets from './ModeTargets';
 
 export default function Goals({ snapshot }: { snapshot: Snapshot }) {
   const live = snapshot.source === 'live';
@@ -49,7 +50,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
         )}
         {catalog && !progress && (
           <span className="muted small">
-            {catalog.sources.length} events and Dark Dimensions, read {new Date(catalog.loadedAt).toLocaleString()}
+            {catalog.sources.length} events and Dark Dimensions, {catalog.raids?.length ?? 0} raids, read {new Date(catalog.loadedAt).toLocaleString()}
           </span>
         )}
         {catalog && !progress && (
@@ -59,6 +60,8 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
       {catalog?.errors.length ? (
         <details className="small muted"><summary>{catalog.errors.length} couldn’t be read</summary>{catalog.errors.join('; ')}</details>
       ) : null}
+
+      <ModeTargets catalog={catalog} />
 
       <h2>Your goals</h2>
       <div className="toolbar">

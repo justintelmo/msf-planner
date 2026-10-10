@@ -9,10 +9,11 @@ import { buildPlan, modeEffectLabel, sumCost, type Step } from '../planner/build
 import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
+import { modeReports, useModeGoals } from '../data/modeGoals';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
-import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters } from '../planner/priority';
+import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, withAllModes } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
 const GOLD_KEY = 'msf.plan.gold';
@@ -122,7 +123,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const label = (id: string) => itemLabel(id, (key) => names.get(key));
   const nameOf = (id: string) => names.get(id) ?? id;
 
-  const [modeOrder, setModeOrder] = useState<string[]>(() => readJson(localStorage, MODES_KEY) ?? DEFAULT_MODE_ORDER);
+  const [modeOrder, setModeOrder] = useState<string[]>(() => withAllModes(readJson(localStorage, MODES_KEY) ?? DEFAULT_MODE_ORDER));
   const moveUp = (i: number) => {
     const next = [...modeOrder];
     [next[i - 1], next[i]] = [next[i], next[i - 1]];
@@ -136,7 +137,11 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
   const { catalog, goals } = useUnlocks();
-  const reports = useMemo(() => goalReports(goals, catalog, owned), [goals, catalog, owned]);
+  const modeGoals = useModeGoals();
+  const reports = useMemo(
+    () => [...goalReports(goals, catalog, owned), ...modeReports(modeGoals, catalog, owned, snapshot.squads ?? {})],
+    [goals, catalog, owned, modeGoals, snapshot.squads],
+  );
   const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? id), [reports, names]);
   const ranked = useMemo(
     () => rankCharacters({
@@ -288,9 +293,9 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         />
       </div>
 
-      {goals.length > 0 && catalog && (
+      {reports.length > 0 && catalog && (
         <>
-          <h2>Unlock goals</h2>
+          <h2>Unlock goals and mode targets</h2>
           <p className="muted small">
             Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
             means the cost uses something the API doesn’t report, like ions.
@@ -313,7 +318,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             return (
               <article className="card plan-goal" key={r.characterId}>
                 <h3>
-                  {nameOf(r.characterId)}{' '}
+                  {r.label ?? nameOf(r.characterId)}{' '}
                   <span className="muted small">
                     {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
                   </span>
