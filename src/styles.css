@@ -176,3 +176,4 @@ details > summary { cursor: pointer; }
   .steps { padding-left: 20px; }
   .plan h2, .goals h2 { font-size: 16px; }
 }
+.toggle { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; min-height: 44px; }

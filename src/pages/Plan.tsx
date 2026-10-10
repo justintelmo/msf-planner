@@ -9,7 +9,7 @@ import { buildPlan, modeEffectLabel, sumCost, type Step } from '../planner/build
 import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
-import { modeReports, useModeGoals } from '../data/modeGoals';
+import { isMetRaid, modeReports, useModeGoals } from '../data/modeGoals';
 import { GOLD_ID, useWallet } from '../data/wallet';
 import Currencies, { withTypedAmounts } from './Currencies';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
@@ -18,6 +18,7 @@ import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 
+const HIDE_MET_KEY = 'msf.plan.hideMetRaids';
 const DAYS_KEY = 'msf.plan.days';
 const RECIPES_KEY = 'msf.recipes.v1';
 const MODES_KEY = 'msf.plan.modes';
@@ -210,6 +211,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const [shownChars, setShownChars] = useState(SHOWN);
   const withSteps = plan.characters.filter((p) => p.steps.length);
 
+  const [hideMet, setHideMet] = useState(() => readJson<boolean>(localStorage, HIDE_MET_KEY) ?? true);
+  const metRaids = reports.filter(isMetRaid).length;
+  const shownReports = hideMet ? reports.filter((r) => !isMetRaid(r)) : reports;
+
   const goalCard = (r: GoalReport) => {
             const checks = r.sources.flatMap((s) => s.checks);
             const met = checks.filter((c) => c.plan.met).length;
@@ -359,7 +364,16 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
             means the cost uses something the API doesn’t report, like ions.
           </p>
-          {groupReports(reports).map((item) =>
+          {metRaids > 0 && (
+            <label className="toggle small">
+              <input type="checkbox" checked={hideMet} onChange={(e) => {
+                setHideMet(e.target.checked);
+                writeJson(localStorage, HIDE_MET_KEY, e.target.checked);
+              }} />{' '}
+              Hide raids I already meet ({metRaids})
+            </label>
+          )}
+          {groupReports(shownReports).map((item) =>
             'reports' in item ? (
               <details key={item.group} className="card goal-group">
                 <summary>

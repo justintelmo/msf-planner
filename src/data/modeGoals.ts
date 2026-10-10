@@ -180,3 +180,8 @@ export function modeReports(goals: ModeGoals, catalog: Catalog | null, roster: O
 export function wantRaidDetail(raid: RaidSource, catalog: Catalog): boolean {
   return raidTarget(state, raid, catalog) >= 0;
 }
+
+/** A raid report whose every requirement the roster already meets. */
+export function isMetRaid(r: GoalReport): boolean {
+  return !!r.group?.startsWith('Raids:') && r.sources.length > 0 && r.sources.every((s) => s.checks.every((c) => c.plan.met));
+}

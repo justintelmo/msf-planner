@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { withAllModes } from '../planner/priority';
-import { combineFilters, isLatestOfType, modeReports, raidFamily, raidTier } from './modeGoals';
-import type { Catalog } from './unlocks';
+import { combineFilters, isLatestOfType, isMetRaid, modeReports, raidFamily, raidTier } from './modeGoals';
+import type { Catalog, GoalReport } from './unlocks';
 import type { OwnedCharacter } from '../planner/requirements';
 
 const c = (id: string, traits: string[], gear: number): OwnedCharacter => ({
@@ -63,5 +63,18 @@ describe('mode targets', () => {
 
   it('slots Battleworld into an older saved mode order', () => {
     expect(withAllModes(['war', 'raids', 'crucible', 'blitz'])).toEqual(['war', 'raids', 'battleworld', 'crucible', 'blitz']);
+  });
+});
+
+describe('isMetRaid', () => {
+  const report = (met: boolean[], group = 'Raids: Ultimus'): GoalReport => ({
+    characterId: 'r', group,
+    sources: [{ checks: met.map((m) => ({ plan: { met: m } })) }],
+  } as unknown as GoalReport);
+  it('is true only for raids where every requirement is met', () => {
+    expect(isMetRaid(report([true, true]))).toBe(true);
+    expect(isMetRaid(report([true, false]))).toBe(false);
+    expect(isMetRaid(report([true], 'Battleworld'))).toBe(false);
+    expect(isMetRaid({ characterId: 'r', group: 'Raids: X', sources: [] })).toBe(false);
   });
 });
