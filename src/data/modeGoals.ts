@@ -13,7 +13,7 @@ const KEY = 'msf.modeGoals.v1';
  * isn't in the API, so its thresholds are typed in from the game.
  */
 export interface ModeGoals {
-  /** Raid id → target difficulty (0 = normal, -1 = skip). Unset means every raid at its top difficulty. */
+  /** Raid id → target difficulty (0 = normal, -1 = skip). Unset means the newest raid of each type at its top difficulty. */
   raids?: Record<string, number>;
   battleworld?: { difficulty: number; characters: number; target: Target };
 }
@@ -92,8 +92,45 @@ export function battleworldTarget(bw: NonNullable<ModeGoals['battleworld']>): Ta
   return Object.values(bw.target).some(Boolean) ? bw.target : (BATTLEWORLD_PRESETS[bw.difficulty] ?? {});
 }
 
-export function raidTarget(goals: ModeGoals, raid: RaidSource): number {
-  return goals.raids?.[raid.id] ?? raid.maxDifficulty ?? 0;
+const ROMAN: Record<string, number> = { I: 1, V: 5, X: 10, L: 50 };
+function fromRoman(r: string): number {
+  let total = 0;
+  for (let i = 0; i < r.length; i++) {
+    const v = ROMAN[r[i]] ?? 0;
+    total += v < (ROMAN[r[i + 1]] ?? 0) ? -v : v;
+  }
+  return total;
+}
+
+const TIER_SUFFIX = /\s+(?:([IVXL]+)|(\d+))$/;
+
+/** The raid's number within its type: "Orchis III" → 3, raid_x_02 → 2, otherwise 1. */
+export function raidTier(raid: RaidSource): number {
+  const m = raid.name.trim().match(TIER_SUFFIX);
+  if (m) return m[1] ? fromRoman(m[1]) : Number(m[2]);
+  const id = raid.id.match(/_(\d+)$/);
+  return id ? Number(id[1]) : 1;
+}
+
+/** Raid type: the API's raid group when known, else the name without its number ("Trepidation Raids" = "Trepidation Raid"). */
+export function raidFamily(raid: RaidSource, catalog: Catalog | null): { key: string; name: string } {
+  const base = raid.name.trim().replace(TIER_SUFFIX, '');
+  const fallback = base.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+  if (raid.groupId) return { key: raid.groupId, name: catalog?.raidGroups?.[raid.groupId] ?? base };
+  return { key: fallback, name: base };
+}
+
+/** Endgame raids: the highest-numbered raid of each type. Older ones are skipped unless chosen. */
+export function isLatestOfType(raid: RaidSource, catalog: Catalog | null): boolean {
+  const key = raidFamily(raid, catalog).key;
+  const siblings = (catalog?.raids ?? []).filter((r) => raidFamily(r, catalog).key === key);
+  return raidTier(raid) >= Math.max(...siblings.map(raidTier));
+}
+
+export function raidTarget(goals: ModeGoals, raid: RaidSource, catalog: Catalog | null = null): number {
+  const chosen = goals.raids?.[raid.id];
+  if (chosen !== undefined) return chosen;
+  return isLatestOfType(raid, catalog) ? (raid.maxDifficulty ?? 0) : -1;
 }
 
 export function difficultyName(raid: RaidSource, difficulty: number): string {
@@ -104,13 +141,14 @@ export function difficultyName(raid: RaidSource, difficulty: number): string {
 export function modeReports(goals: ModeGoals, catalog: Catalog | null, roster: OwnedCharacter[], squads: Squads): GoalReport[] {
   const reports: GoalReport[] = [];
   for (const raid of catalog?.raids ?? []) {
-    const difficulty = raidTarget(goals, raid);
+    const difficulty = raidTarget(goals, raid, catalog);
     if (difficulty < 0) continue;
     const id = raid.id;
     const source = raidAt(raid, difficulty);
     reports.push({
       characterId: `raid:${id}`,
       label: `${raid.name} (${difficultyName(raid, difficulty)})`,
+      group: `Raids: ${raidFamily(raid, catalog).name}`,
       sources: [{ source, checks: distinctRequirements(source).map((g) => ({ ...g, plan: planRequirement(roster, g.requirements) })) }],
     });
   }

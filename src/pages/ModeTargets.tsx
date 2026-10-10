@@ -1,6 +1,18 @@
 import type { Target } from '../planner/gaps';
-import { BATTLEWORLD_PRESETS, battleworldTarget, difficultyName, raidTarget, setModeGoals, useModeGoals } from '../data/modeGoals';
-import type { Catalog } from '../data/unlocks';
+import { BATTLEWORLD_PRESETS, battleworldTarget, difficultyName, raidFamily, raidTarget, raidTier, setModeGoals, useModeGoals } from '../data/modeGoals';
+import type { Catalog, RaidSource } from '../data/unlocks';
+
+/** Raids gathered by type, newest first within each type. */
+function raidTypes(catalog: Catalog): { name: string; raids: RaidSource[] }[] {
+  const types = new Map<string, { name: string; raids: RaidSource[] }>();
+  for (const r of catalog.raids ?? []) {
+    const f = raidFamily(r, catalog);
+    const t = types.get(f.key) ?? { name: f.name, raids: [] };
+    t.raids.push(r);
+    types.set(f.key, t);
+  }
+  return [...types.values()].map((t) => ({ ...t, raids: t.raids.sort((a, b) => raidTier(b) - raidTier(a)) }));
+}
 
 const BW_FIELDS: { key: keyof Target; label: string }[] = [
   { key: 'gearTier', label: 'Gear tier' },
@@ -31,28 +43,43 @@ export default function ModeTargets({ catalog }: { catalog: Catalog | null }) {
       ) : catalog.raids.length === 0 ? (
         <p className="muted small">The API didn’t list any raids.</p>
       ) : (
-        <ul className="raid-targets">
-          {catalog.raids.map((r) => {
-            const value = raidTarget(goals, r);
-            const max = r.maxDifficulty ?? 0;
-            const diff = value > 0 ? r.difficulties[String(value)] : undefined;
-            return (
-              <li key={r.id} className="small">
-                <strong>{r.name}</strong>{r.subName ? <span className="muted"> · {r.subName}</span> : null}{' '}
-                <select
-                  value={value}
-                  onChange={(e) => setModeGoals({ ...goals, raids: { ...(goals.raids ?? {}), [r.id]: Number(e.target.value) } })}
-                >
-                  <option value={-1}>Skip</option>
-                  {Array.from({ length: max + 1 }, (_, d) => (
-                    <option key={d} value={d}>{difficultyName(r, d)}{d === max && max > 0 ? ' (highest)' : ''}</option>
-                  ))}
-                </select>
-                {diff?.recommendations && <span className="muted"> · {diff.recommendations}</span>}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <p className="muted small">
+            By default only the newest raid of each type is targeted, at its highest difficulty. Open a type to change that.
+          </p>
+          {raidTypes(catalog).map(({ name, raids }) => (
+            <details key={name} className="raid-type">
+              <summary className="small">
+                <strong>{name}</strong>{' '}
+                <span className="muted">
+                  {raids.filter((r) => raidTarget(goals, r, catalog) >= 0).map((r) => `${r.name} (${difficultyName(r, raidTarget(goals, r, catalog))})`).join(', ') || 'skipped'}
+                </span>
+              </summary>
+              <ul className="raid-targets">
+                {raids.map((r) => {
+                  const value = raidTarget(goals, r, catalog);
+                  const max = r.maxDifficulty ?? 0;
+                  const diff = value > 0 ? r.difficulties[String(value)] : undefined;
+                  return (
+                    <li key={r.id} className="small">
+                      <strong>{r.name}</strong>{r.subName ? <span className="muted"> · {r.subName}</span> : null}{' '}
+                      <select
+                        value={value}
+                        onChange={(e) => setModeGoals({ ...goals, raids: { ...(goals.raids ?? {}), [r.id]: Number(e.target.value) } })}
+                      >
+                        <option value={-1}>Skip</option>
+                        {Array.from({ length: max + 1 }, (_, d) => (
+                          <option key={d} value={d}>{difficultyName(r, d)}{d === max && max > 0 ? ' (highest)' : ''}</option>
+                        ))}
+                      </select>
+                      {diff?.recommendations && <span className="muted"> · {diff.recommendations}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+          ))}
+        </>
       )}
 
       <h4>Battleworld</h4>

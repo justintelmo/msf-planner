@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withAllModes } from '../planner/priority';
-import { combineFilters, modeReports } from './modeGoals';
+import { combineFilters, isLatestOfType, modeReports, raidFamily, raidTier } from './modeGoals';
 import type { Catalog } from './unlocks';
 import type { OwnedCharacter } from '../planner/requirements';
 
@@ -45,6 +45,20 @@ describe('mode targets', () => {
   it('uses the game’s difficulty 7 numbers when nothing is typed in', () => {
     const [bw] = modeReports({ raids: {}, battleworld: { difficulty: 7, characters: 1, target: {} } }, null, [c('A', [], 19)], {});
     expect(bw.sources[0].checks[0].plan.picks[0].gap).toMatchObject({ level: 108, gearTier: 20, activeRed: 10, iso8ClassLevel: 15 });
+  });
+
+  it('groups raids by type and only targets the newest of each by default', () => {
+    const raid = (id: string, name: string) => ({ id, name, maxDifficulty: 3, difficulties: {}, rooms: [] });
+    const raids = [
+      raid('raid_trepidation', 'Trepidation Raids'), raid('raid_trepidation_02', 'Trepidation Raids'), raid('raid_trepidation_03', 'Trepidation Raid'),
+      raid('raid_orchis_1', 'Orchis I'), raid('raid_orchis_2', 'Orchis II'), raid('raid_ultimus', 'Ultimus'),
+    ];
+    const catalog: Catalog = { loadedAt: 0, sources: [], errors: [], raids };
+    expect(raidFamily(raids[0], catalog).key).toBe(raidFamily(raids[2], catalog).key);
+    expect(raidTier(raids[4])).toBe(2);
+    expect(raids.filter((r) => isLatestOfType(r, catalog)).map((r) => r.id)).toEqual(['raid_trepidation_03', 'raid_orchis_2', 'raid_ultimus']);
+    const reports = modeReports({}, catalog, [], {});
+    expect(reports.map((r) => r.group)).toEqual(['Raids: Trepidation Raid', 'Raids: Orchis', 'Raids: Ultimus']);
   });
 
   it('slots Battleworld into an older saved mode order', () => {

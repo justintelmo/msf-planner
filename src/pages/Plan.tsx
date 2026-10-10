@@ -10,7 +10,7 @@ import { plainName } from '../planner/export';
 import { compact, formatCost, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { modeReports, useModeGoals } from '../data/modeGoals';
-import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks } from '../data/unlocks';
+import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
@@ -203,6 +203,49 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const [shownChars, setShownChars] = useState(SHOWN);
   const withSteps = plan.characters.filter((p) => p.steps.length);
 
+  const goalCard = (r: GoalReport) => {
+            const checks = r.sources.flatMap((s) => s.checks);
+            const met = checks.filter((c) => c.plan.met).length;
+            const merged = new Map<string, { character: (typeof owned)[number]; target: Target }>();
+            for (const c of checks) {
+              for (const p of c.plan.picks) {
+                const prev = merged.get(p.character.info.id);
+                merged.set(p.character.info.id, { character: p.character, target: prev ? mergeTargets(prev.target, p.gap) : p.gap });
+              }
+            }
+            const gaps = new Map(
+              [...merged].map(([id, m]) => [id, describeGap(m.character, m.target)] as const).filter(([, g]) => g.length),
+            );
+            const steps = plan.doNow.concat(plan.characters.flatMap((p) => p.steps.filter((x) => x.status !== 'ready')));
+            const prereqs = r.sources.filter((s) => s.unlocks).map((s) => (s.source.subName ? `${s.source.name} (${s.source.subName})` : s.source.name));
+            return (
+              <article className="card plan-goal" key={r.characterId}>
+                <h3>
+                  {r.label ?? nameOf(r.characterId)}{' '}
+                  <span className="muted small">
+                    {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
+                  </span>
+                </h3>
+                {prereqs.length > 0 && <p className="small warn">Clear first: {prereqs.join(', ')}.</p>}
+                <ul>
+                  {[...gaps].map(([id, g]) => {
+                    const own = steps.filter((x) => x.characterId === id && x.goal);
+                    const count = (st: Step['status']) => own.filter((x) => x.status === st).length;
+                    return (
+                      <li key={id} className="small">
+                        <strong>{nameOf(id)}</strong>: {g.join(', ')}
+                        {count('ready') > 0 && <span className="pill ready"> {count('ready')} do now</span>}
+                        {count('short') > 0 && <span className="pill short"> {count('short')} short</span>}
+                        {count('unchecked') > 0 && <span className="pill unchecked"> {count('unchecked')} check in game</span>}
+                      </li>
+                    );
+                  })}
+                  {gaps.size === 0 && r.sources.length > 0 && <li className="small ok">Your roster already meets every requirement.</li>}
+                </ul>
+              </article>
+    );
+  };
+
   return (
     <section className="plan">
       <div className="toolbar">
@@ -309,48 +352,23 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
             means the cost uses something the API doesn’t report, like ions.
           </p>
-          {reports.map((r) => {
-            const checks = r.sources.flatMap((s) => s.checks);
-            const met = checks.filter((c) => c.plan.met).length;
-            const merged = new Map<string, { character: (typeof owned)[number]; target: Target }>();
-            for (const c of checks) {
-              for (const p of c.plan.picks) {
-                const prev = merged.get(p.character.info.id);
-                merged.set(p.character.info.id, { character: p.character, target: prev ? mergeTargets(prev.target, p.gap) : p.gap });
-              }
-            }
-            const gaps = new Map(
-              [...merged].map(([id, m]) => [id, describeGap(m.character, m.target)] as const).filter(([, g]) => g.length),
-            );
-            const steps = plan.doNow.concat(plan.characters.flatMap((p) => p.steps.filter((x) => x.status !== 'ready')));
-            const prereqs = r.sources.filter((s) => s.unlocks).map((s) => (s.source.subName ? `${s.source.name} (${s.source.subName})` : s.source.name));
-            return (
-              <article className="card plan-goal" key={r.characterId}>
-                <h3>
-                  {r.label ?? nameOf(r.characterId)}{' '}
+          {groupReports(reports).map((item) =>
+            'reports' in item ? (
+              <details key={item.group} className="card goal-group">
+                <summary>
+                  <strong>{item.group}</strong>{' '}
                   <span className="muted small">
-                    {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
+                    {item.reports.length} raid{item.reports.length > 1 ? 's' : ''} ·{' '}
+                    {item.reports.reduce((n, r) => n + r.sources.flatMap((x) => x.checks).filter((c) => c.plan.met).length, 0)} of{' '}
+                    {item.reports.reduce((n, r) => n + r.sources.flatMap((x) => x.checks).length, 0)} requirements met
                   </span>
-                </h3>
-                {prereqs.length > 0 && <p className="small warn">Clear first: {prereqs.join(', ')}.</p>}
-                <ul>
-                  {[...gaps].map(([id, g]) => {
-                    const own = steps.filter((x) => x.characterId === id && x.goal);
-                    const count = (st: Step['status']) => own.filter((x) => x.status === st).length;
-                    return (
-                      <li key={id} className="small">
-                        <strong>{nameOf(id)}</strong>: {g.join(', ')}
-                        {count('ready') > 0 && <span className="pill ready"> {count('ready')} do now</span>}
-                        {count('short') > 0 && <span className="pill short"> {count('short')} short</span>}
-                        {count('unchecked') > 0 && <span className="pill unchecked"> {count('unchecked')} check in game</span>}
-                      </li>
-                    );
-                  })}
-                  {gaps.size === 0 && r.sources.length > 0 && <li className="small ok">Your roster already meets every requirement.</li>}
-                </ul>
-              </article>
-            );
-          })}
+                </summary>
+                {item.reports.map(goalCard)}
+              </details>
+            ) : (
+              goalCard(item)
+            ),
+          )}
         </>
       )}
 
@@ -460,6 +478,26 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       )}
     </section>
   );
+}
+
+/** Keeps ungrouped reports in place and gathers grouped ones (e.g. one raid type) where the group first appears. */
+function groupReports(reports: GoalReport[]): (GoalReport | { group: string; reports: GoalReport[] })[] {
+  const out: (GoalReport | { group: string; reports: GoalReport[] })[] = [];
+  const groups = new Map<string, { group: string; reports: GoalReport[] }>();
+  for (const r of reports) {
+    if (!r.group) {
+      out.push(r);
+      continue;
+    }
+    let g = groups.get(r.group);
+    if (!g) {
+      g = { group: r.group, reports: [] };
+      groups.set(r.group, g);
+      out.push(g);
+    }
+    g.reports.push(r);
+  }
+  return out;
 }
 
 function Tile({ label, value }: { label: string; value: string }) {

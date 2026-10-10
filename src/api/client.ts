@@ -229,6 +229,9 @@ export const msfApi = {
       raidRewards: 'full', raidInfo: 'full', raidMap: 'full', nodeCombat: 'none', pieceInfo: 'none',
     })).data;
   },
+  async raidGroups(): Promise<{ id: string; name?: string }[]> {
+    return (await getPaged<{ id: string; name?: string }>('/game/v1/raidGroups', { itemFormat: 'id', traitFormat: 'id' })).data;
+  },
   async raids(): Promise<RaidInfo[]> {
     return (await getPaged<RaidInfo>('/game/v1/raids', { itemFormat: 'id', traitFormat: 'id', raidInfo: 'full' })).data;
   },

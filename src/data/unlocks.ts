@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type CharacterFilter, type CharacterInfo, type RaidDifficulty, type Requirements } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
+import { plainName } from '../planner/export';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
 import {
@@ -24,6 +25,7 @@ export const EPISODIC_TYPES: Record<string, string> = {
 export interface RaidSource {
   id: string;
   name: string;
+  groupId?: string;
   subName?: string;
   teams?: number;
   maxDifficulty?: number;
@@ -36,6 +38,8 @@ export interface Catalog {
   sources: UnlockSource[];
   /** Missing in catalogs loaded before raids were read. */
   raids?: RaidSource[];
+  /** Raid group id → name. */
+  raidGroups?: Record<string, string>;
   errors: string[];
 }
 
@@ -101,6 +105,8 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
   set({ progress: 'Reading raids…' });
   const raids: RaidSource[] = [];
   const raidList = await msfApi.raids().catch((e) => (note('Raids', e), []));
+  const groups = await msfApi.raidGroups().catch(() => []);
+  const raidGroups = Object.fromEntries(groups.map((g) => [g.id, plainName(g.name ?? g.id)]));
   for (let i = 0; i < raidList.length; i += 4) {
     set({ progress: `Reading raids (${Math.min(i + 4, raidList.length)} of ${raidList.length})…` });
     const batch = await Promise.all(
@@ -110,7 +116,7 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
       if (!r) continue;
       const asDd = fromDarkDimension(r, shards);
       raids.push({
-        id: r.id, name: asDd.name, subName: asDd.subName, teams: r.teams, maxDifficulty: r.maxDifficulty,
+        id: r.id, name: asDd.name, subName: asDd.subName, groupId: r.groupId ?? raidList.find((x) => x.id === r.id)?.groupId, teams: r.teams, maxDifficulty: r.maxDifficulty,
         difficulties: r.difficulties ?? {}, rooms: asDd.nodes,
       });
     }
@@ -126,7 +132,7 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
       batch.forEach((ep) => ep && sources.push(fromEpisodic(label, ep, shards)));
     }
   }
-  const catalog = { loadedAt: Date.now(), sources, raids, errors };
+  const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, errors };
   writeJson(localStorage, CATALOG_KEY, catalog);
   set({ catalog, progress: null });
 }
@@ -148,6 +154,8 @@ export interface GoalReport {
   characterId: string;
   /** Display name when the goal isn't a character, e.g. a raid difficulty. */
   label?: string;
+  /** Reports sharing a group (e.g. one raid type) are shown together. */
+  group?: string;
   sources: GoalSourceReport[];
 }
 
