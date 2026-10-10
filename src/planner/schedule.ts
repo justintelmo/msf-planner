@@ -11,6 +11,7 @@ import {
 import { GOLD, goldOf, sumCost, type Step, type StepKind } from './build';
 import type { Target } from './gaps';
 import type { ModeTag } from './modeTags';
+import { crystalPlan, crystalsOf, CRYSTAL_SLOTS, type Crystals } from './iso';
 import { isUnlocked, type OwnedCharacter } from './requirements';
 
 /** Gear piece id → what it takes to craft one (sub-pieces and gold). */
@@ -126,6 +127,7 @@ interface Cursor {
   abilities: Record<AbilitySlot, number>;
   isoClass?: IsoClass;
   isoLevel: number;
+  crystals: Crystals;
   /** ISO levels planned without ion balances to check against. */
   blindIso: number;
 }
@@ -136,6 +138,8 @@ interface Option {
   cost: Cost;
   value: number;
   unchecked?: string;
+  /** The part of `cost` that can be checked against the inventory; defaults to all of it, or only gold when unchecked. */
+  checkable?: Cost;
   detail?: string;
   modeEffects?: ModeTag[];
   goalField?: keyof Target;
@@ -288,13 +292,23 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
     const to = blind ? Math.max(cur.isoLevel + 1, goalIso) : cur.isoLevel + 1;
     const lvls = Object.keys(table).map(Number).filter((l) => l > cur.isoLevel && l <= to);
     if (lvls.length && (!blind || cur.blindIso < 1) && table[to]) {
+      // The crystals have to reach the new level first (see iso.ts).
+      const crystals = crystalPlan(upgrades, cur.c.info, cur.crystals, to);
+      const tooLow = crystals.levelRequired !== undefined && cur.level < crystals.levelRequired;
       out.push({
         kind: 'iso', title: `ISO-8 ${cur.isoClass ?? 'class'} ${cur.isoLevel} → ${to}`, value: VALUE.iso * lvls.length, goalField: 'iso8ClassLevel',
-        cost: sumCost(...lvls.map((l) => table[l])),
-        unchecked: blind ? 'Ion balances aren’t in your inventory data; check in game.' : undefined,
-        detail: cur.isoClass ? undefined : 'Choose an ISO-8 class first.',
+        cost: sumCost(...lvls.map((l) => table[l]), crystals.cost),
+        // Crystal materials and gold are in the inventory data even when ions aren't.
+        checkable: sumCost(...lvls.map((l) => table[l]), crystals.cost).filter((c) => !blind || !c.item.startsWith(ION_PREFIX)),
+        unchecked: [blind && 'Ion balances aren’t in your inventory data; check in game.', crystals.unknown, tooLow && `The new matrix needs character level ${crystals.levelRequired}.`]
+          .filter(Boolean).join(' ') || undefined,
+        detail: [cur.isoClass ? undefined : 'Choose an ISO-8 class first.', crystals.detail].filter(Boolean).join(' ') || undefined,
         apply: (x) => {
           x.isoLevel = to;
+          x.crystals = {
+            tier: Math.max(x.crystals.tier, Math.ceil(to / 5)),
+            levels: Object.fromEntries(CRYSTAL_SLOTS.map((sl) => [sl, Math.max(x.crystals.levels[sl], to)])) as Crystals['levels'],
+          };
           if (blind) x.blindIso += 1;
         },
       });
@@ -315,6 +329,7 @@ function cursorOf(c: OwnedCharacter): Cursor {
     abilities: { basic: i.basic ?? 1, special: i.special ?? 1, ultimate: i.ultimate ?? 1, passive: i.passive ?? 1 },
     isoClass: cls,
     isoLevel: cls ? ((i.iso8?.[cls] as number | undefined) ?? 0) : 0,
+    crystals: crystalsOf(i, cls ? ((i.iso8?.[cls] as number | undefined) ?? 0) : 0),
     blindIso: 0,
   };
 }
@@ -352,7 +367,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     const target = targets[id]?.target;
     return options(cur, input, stock).map((o) => {
       // Unchecked costs (ions without balances) only charge their gold.
-      const trial = stock.trial(o.unchecked ? o.cost.filter((c) => c.item === GOLD) : o.cost);
+      const trial = stock.trial(o.checkable ?? (o.unchecked ? o.cost.filter((c) => c.item === GOLD) : o.cost));
       const forGoal = !!(target && o.goalField && target[o.goalField] !== undefined && current(cur, o.goalField) < (target[o.goalField] as number));
       const score =
         (o.value * weight * (forGoal ? GOAL_BOOST : 1) * (o.unchecked ? UNCHECKED_FACTOR : 1)) / (1 + trial.gold / 250_000);

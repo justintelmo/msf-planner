@@ -9,6 +9,7 @@ import {
   type UpgradeTables,
 } from '../api/types';
 import type { Target } from './gaps';
+import { crystalPlan, crystalsOf } from './iso';
 import type { ModeTag } from './modeTags';
 import { MODE_LABELS } from './priority';
 import { isUnlocked, type OwnedCharacter } from './requirements';
@@ -234,10 +235,11 @@ function isoStep(c: OwnedCharacter, input: PlanInput): Step | undefined {
   const current = iso?.[cls] ?? 0;
   const next = levels(table).find((l) => l > current);
   if (!next) return undefined;
+  const crystals = crystalPlan(input.upgrades, c.info, crystalsOf(c.instance, current), next);
   return {
-    characterId: c.info.id, kind: 'iso', status: 'unchecked', cost: table[next], missing: [],
+    characterId: c.info.id, kind: 'iso', status: 'unchecked', cost: sumCost(table[next], crystals.cost), missing: [],
     title: `ISO-8 ${cls} ${current} → ${next}`,
-    detail: 'Ion balances aren’t in the API, so check this one in game.',
+    detail: ['Ion balances aren’t in the API, so check this one in game.', crystals.detail, crystals.unknown].filter(Boolean).join(' '),
   };
 }
 
@@ -331,10 +333,12 @@ function targetSteps(c: OwnedCharacter, target: Target, input: PlanInput, ledger
     const current = (inst.iso8?.[cls] as number | undefined) ?? 0;
     const lv = levels(table).filter((l) => l > current && l <= target.iso8ClassLevel!);
     if (lv.length) {
+      const crystals = crystalPlan(input.upgrades, c.info, crystalsOf(inst, current), target.iso8ClassLevel);
       steps.push({
         characterId: id, kind: 'iso', status: 'unchecked', missing: [],
-        cost: sumCost(...lv.map((l) => table[l])),
-        title: `ISO-8 ${cls} ${current} → ${target.iso8ClassLevel}`, detail: 'Ion balances aren’t in the API, so check this one in game.',
+        cost: sumCost(...lv.map((l) => table[l]), crystals.cost),
+        title: `ISO-8 ${cls} ${current} → ${target.iso8ClassLevel}`,
+        detail: ['Ion balances aren’t in the API, so check this one in game.', crystals.detail, crystals.unknown].filter(Boolean).join(' '),
       });
     }
   } else if (target.iso8ClassLevel && !cls) {

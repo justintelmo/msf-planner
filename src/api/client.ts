@@ -182,7 +182,7 @@ export const msfApi = {
   async upgrades(): Promise<UpgradeTables> {
     const field = async <T>(name: string) =>
       (await get<T>(`/game/v1/upgradeData/${name}`, { itemFormat: 'id' })).data;
-    const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts, xpCosts, levelXp] = await Promise.all([
+    const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts, xpCosts, levelXp, fuseCosts, matrixCosts, matrixReqs] = await Promise.all([
       field<Nested<ApiCost>>('abilityUpgradeCosts'),
       field<Nested<number>>('abilityLevelRequirements'),
       field<Record<string, number>>('yellowStarTotalShards'),
@@ -191,6 +191,9 @@ export const msfApi = {
       // Newer fields: a failure here shouldn't lose the rest.
       field<{ xpReward: number; cost: ApiCost }[]>('characterXpCosts').catch(() => undefined),
       field<(number | null)[]>('characterLevelTotalXp').catch(() => undefined),
+      field<Record<string, Nested<ApiCost>>>('iso8FuseCosts').catch(() => undefined),
+      field<Record<string, ApiCost>>('iso8MatrixUpgradeCosts').catch(() => undefined),
+      field<Record<string, number>>('iso8MatrixLevelRequirements').catch(() => undefined),
     ]);
     return {
       abilityUpgradeCosts: mapValues(abilityCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['abilityUpgradeCosts'],
@@ -200,6 +203,9 @@ export const msfApi = {
       iso8AbilityUpgradeCosts: mapValues(isoCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['iso8AbilityUpgradeCosts'],
       characterXpCosts: xpCosts?.map((x) => ({ xpReward: x.xpReward, cost: flattenCost(x.cost) })),
       characterLevelTotalXp: levelXp,
+      iso8FuseCosts: fuseCosts && mapValues(fuseCosts, (slots) => mapValues(slots, (lv) => mapValues(lv, flattenCost))),
+      iso8MatrixUpgradeCosts: matrixCosts && mapValues(matrixCosts, flattenCost),
+      iso8MatrixLevelRequirements: matrixReqs,
     };
   },
   async squads(): Promise<Squads> {

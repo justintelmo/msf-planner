@@ -142,6 +142,12 @@ export interface UpgradeTables {
   yellowStarTotalCosts: Record<string, Cost>;
   /** ISO-8 class level → cost to reach that level. */
   iso8AbilityUpgradeCosts: Record<IsoClass, Record<string, Cost>>;
+  /** Crystal fuse costs: role (controller, …) → crystal slot (damage, …) → crystal level → cost. */
+  iso8FuseCosts?: Record<string, Record<string, Record<string, Cost>>>;
+  /** Matrix tier (2 = blue, 3 = purple) → cost. */
+  iso8MatrixUpgradeCosts?: Record<string, Cost>;
+  /** Matrix tier → minimum character level. */
+  iso8MatrixLevelRequirements?: Record<string, number>;
   /** Ways to earn character XP, e.g. one training module plus gold. */
   characterXpCosts?: { xpReward: number; cost: Cost }[];
   /** Total XP from level 1 to each level (index = level). */
