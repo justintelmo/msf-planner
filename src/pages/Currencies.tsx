@@ -1,16 +1,32 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { idOf, type ItemQuantity, type UpgradeTables } from '../api/types';
 import { GOLD_ID, parseAmount, POWER_CORES_ID, setAmount, setGoldPerDay, useWallet } from '../data/wallet';
 import { compact } from '../planner/items';
 
-/** A number field that accepts the game's shorthand (5.2M, 36.8K) and saves as you type. */
+/** How long typing must pause before an amount is saved and the plan recalculates. */
+const SAVE_DELAY = 600;
+
+/**
+ * A number field that accepts the game's shorthand (5.2M, 36.8K). The text stays local while
+ * typing; the amount is saved once typing pauses, or right away on leaving the field.
+ */
 function AmountInput({ label, value, onChange, placeholder }: {
   label: string; value: number | undefined; onChange: (v: number | undefined) => void; placeholder?: string;
 }) {
   const id = useId();
   const [text, setText] = useState(value === undefined ? '' : String(value));
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pending = useRef<{ v: number | undefined } | undefined>(undefined);
+  const commit = useRef(onChange);
+  commit.current = onChange;
+  const flush = () => {
+    clearTimeout(timer.current);
+    if (pending.current) commit.current(pending.current.v);
+    pending.current = undefined;
+  };
+  useEffect(() => flush, []); // save anything still pending when the panel closes
   useEffect(() => {
-    if (parseAmount(text) !== value) setText(value === undefined ? '' : String(value));
+    if (!pending.current && parseAmount(text) !== value) setText(value === undefined ? '' : String(value));
     // Only follow outside changes; typing is handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -20,12 +36,17 @@ function AmountInput({ label, value, onChange, placeholder }: {
     <div className="amount">
       <label htmlFor={id}>{label}</label>
       <input
-        id={id} inputMode="decimal" placeholder={placeholder ?? 'e.g. 5.2M'} value={text} aria-invalid={invalid}
+        id={id} inputMode="decimal" enterKeyHint="done" placeholder={placeholder ?? 'e.g. 5.2M'} value={text} aria-invalid={invalid}
         onChange={(e) => {
           setText(e.target.value);
           const v = parseAmount(e.target.value);
-          if (e.target.value.trim() === '' || v !== undefined) onChange(v);
+          if (e.target.value.trim() !== '' && v === undefined) return;
+          pending.current = { v };
+          clearTimeout(timer.current);
+          timer.current = setTimeout(flush, SAVE_DELAY);
         }}
+        onBlur={flush}
+        onKeyDown={(e) => e.key === 'Enter' && flush()}
       />
       {parsed !== undefined && parsed >= 1000 && <span className="muted small">{compact(parsed)}</span>}
       {invalid && <span className="warn small">Use a number like 5200000 or 5.2M</span>}
@@ -57,8 +78,12 @@ export default function Currencies({ inventory, upgrades, label }: {
   const gold = wallet.amounts[GOLD_ID];
   const cores = wallet.amounts[POWER_CORES_ID];
 
+  // Open on first visit until gold is entered; after that the user decides. Not tied to gold
+  // directly, or the panel would snap shut on the first digit typed.
+  const [open, setOpen] = useState(() => gold === undefined);
+
   return (
-    <details className="card currencies" open={gold === undefined}>
+    <details className="card currencies" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary>
         <strong>Currencies</strong>{' '}
         <span className="muted small">
@@ -86,7 +111,7 @@ export default function Currencies({ inventory, upgrades, label }: {
           “check in game”.
         </p>
       )}
-      <div className="amounts ions">
+      {open && <div className="amounts ions">
         {ions.map((id) =>
           fromGame.has(id) ? (
             <div key={id} className="amount">
@@ -97,7 +122,7 @@ export default function Currencies({ inventory, upgrades, label }: {
             <AmountInput key={id} label={label(id)} value={wallet.amounts[id]} onChange={(v) => setAmount(id, v)} placeholder="0" />
           ),
         )}
-      </div>
+      </div>}
     </details>
   );
 }

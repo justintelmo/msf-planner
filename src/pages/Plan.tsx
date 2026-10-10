@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type GearTiers } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
@@ -131,9 +131,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     writeJson(localStorage, MODES_KEY, next);
   };
   const wallet = useWallet();
-  const gold = wallet.amounts[GOLD_ID];
-  const goldPerDay = wallet.goldPerDay;
-  const inventory = useMemo(() => withTypedAmounts(snapshot.inventory, wallet.amounts), [snapshot.inventory, wallet.amounts]);
+  // Deferred so a saved amount never blocks the page: the plan recalculates in the background
+  // and the inputs stay responsive. Only ions touch the inventory, so power cores don't trigger a rebuild.
+  const gold = useDeferredValue(wallet.amounts[GOLD_ID]);
+  const goldPerDay = useDeferredValue(wallet.goldPerDay);
+  const ionKey = useDeferredValue(JSON.stringify(Object.entries(wallet.amounts).filter(([id]) => id.startsWith('ISO8-'))));
+  const inventory = useMemo(
+    () => withTypedAmounts(snapshot.inventory, Object.fromEntries(JSON.parse(ionKey) as [string, number][])),
+    [snapshot.inventory, ionKey],
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
