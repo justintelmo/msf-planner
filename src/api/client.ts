@@ -180,8 +180,24 @@ export const msfApi = {
   },
   /** Fetched field by field: the full upgradeData response is over the API's size limit. */
   async upgrades(): Promise<UpgradeTables> {
-    const field = async <T>(name: string) =>
-      (await get<T>(`/game/v1/upgradeData/${name}`, { itemFormat: 'id' })).data;
+    // Item ids only, without piece metadata or text: the cost tables are otherwise too large (472).
+    const small = { itemFormat: 'id', pieceInfo: 'none', pieceDirectCost: 'none', pieceFlatCost: 'none', subPieceInfo: 'none', lang: 'none' };
+    const field = async <T>(name: string, extra: Record<string, string> = {}) =>
+      (await get<T>(`/game/v1/upgradeData/${name}`, { ...small, ...extra })).data;
+    // Crystal fuse costs are the biggest table; if it's still too large, ask for one role at a time.
+    const readFuseCosts = async () => {
+      try {
+        return await field<Record<string, Nested<ApiCost>>>('iso8FuseCosts');
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.status !== 472) throw e;
+        const roles = await Promise.all(
+          ['blaster', 'brawler', 'controller', 'protector', 'support'].map(async (r) =>
+            [r, (await field<Record<string, Nested<ApiCost>>>('iso8FuseCosts', { flexFields: r }))?.[r]] as const,
+          ),
+        );
+        return Object.fromEntries(roles.filter(([, v]) => v));
+      }
+    };
     const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts, xpCosts, levelXp, fuseCosts, matrixCosts, matrixReqs] = await Promise.all([
       field<Nested<ApiCost>>('abilityUpgradeCosts'),
       field<Nested<number>>('abilityLevelRequirements'),
@@ -191,7 +207,7 @@ export const msfApi = {
       // Newer fields: a failure here shouldn't lose the rest.
       field<{ xpReward: number; cost: ApiCost }[]>('characterXpCosts').catch(() => undefined),
       field<(number | null)[]>('characterLevelTotalXp').catch(() => undefined),
-      field<Record<string, Nested<ApiCost>>>('iso8FuseCosts').catch(() => undefined),
+      readFuseCosts().catch(() => undefined),
       field<Record<string, ApiCost>>('iso8MatrixUpgradeCosts').catch(() => undefined),
       field<Record<string, number>>('iso8MatrixLevelRequirements').catch(() => undefined),
     ]);

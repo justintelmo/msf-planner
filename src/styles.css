@@ -180,3 +180,9 @@ details > summary { cursor: pointer; }
 .review { margin-bottom: 12px; }
 .review[open] > summary { margin-bottom: 8px; }
 .review-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.explore .path-input { flex: 1 1 260px; min-width: 0; }
+.params { margin: 8px 0 12px; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px 16px; margin: 8px 0; }
+.param-grid label { display: flex; flex-direction: column; gap: 3px; }
+.param-grid select, .param-grid input { width: 100%; box-sizing: border-box; }
+.params code { word-break: break-all; }
