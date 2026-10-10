@@ -90,10 +90,12 @@ function useRecipes(pieces: string[], live: boolean) {
     const todo = missing.split(',');
     todo.forEach((p) => tried.add(p));
     setRemaining(todo.length);
+    let done = 0;
     (async () => {
       for (let i = 0; i < todo.length && !cancelled; i += 4) {
         const batch = await Promise.all(todo.slice(i, i + 4).map((p) => msfApi.gearRecipes(p).catch(() => ({}))));
         if (cancelled) return;
+        done = i + 4;
         setRecipes((r) => {
           const next = Object.assign({}, r, ...batch);
           writeJson(localStorage, RECIPES_KEY, next);
@@ -104,6 +106,8 @@ function useRecipes(pieces: string[], live: boolean) {
     })();
     return () => {
       cancelled = true;
+      // Pieces not fetched yet are tried again when the page shows next.
+      todo.slice(done).forEach((p) => tried.delete(p));
     };
   }, [missing, live, tried]);
 

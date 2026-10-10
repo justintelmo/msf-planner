@@ -21,10 +21,16 @@ export function isUnlocked(c: OwnedCharacter): boolean {
   return (c.instance?.activeYellow ?? 0) > 0;
 }
 
+// Character info objects don't change once loaded, so each one's trait set is built once.
+const traitCache = new WeakMap<CharacterInfo, Set<string>>();
+
 function traitIds(info: CharacterInfo): Set<string> {
-  return new Set(
-    [...(info.traits ?? []), ...(info.invisibleTraits ?? [])].map(idOf).filter((t): t is string => !!t),
-  );
+  let traits = traitCache.get(info);
+  if (!traits) {
+    traits = new Set([...(info.traits ?? []), ...(info.invisibleTraits ?? [])].map(idOf).filter((t): t is string => !!t));
+    traitCache.set(info, traits);
+  }
+  return traits;
 }
 
 /** Level of the active ISO-8 class, e.g. 13 for purple level 3. */

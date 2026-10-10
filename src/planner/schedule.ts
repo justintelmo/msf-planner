@@ -57,24 +57,30 @@ export interface Schedule {
 /** Inventory with recursive crafting. Trials run on an overlay so failed ones leave no trace. */
 class Stock {
   private stock = new Map<string, number>();
+  /** When set, every item looked up is recorded here (see buildSchedule's evaluation cache). */
+  reads?: Set<string>;
+  /** Ion ids held; the set of item ids never changes after construction. */
+  private ions: string[];
 
   constructor(inventory: ItemQuantity[], private recipes: Recipes) {
     for (const { item, quantity } of inventory) {
       const id = idOf(item);
       if (id) this.stock.set(id, (this.stock.get(id) ?? 0) + (quantity ?? 0));
     }
+    this.ions = [...this.stock.keys()].filter((k) => k.endsWith('-CURRENCY'));
   }
 
   has(item: string): number {
+    this.reads?.add(item);
     return this.stock.get(item) ?? 0;
   }
 
   holdsAny(prefix: string): boolean {
-    return [...this.stock.keys()].some((k) => k.startsWith(prefix) && k.endsWith('-CURRENCY'));
+    return this.ions.some((k) => k.startsWith(prefix));
   }
 
   /** What taking `cost` would use, crafting missing pieces when a recipe exists. */
-  trial(cost: Cost): { gold: number; missing: Cost; crafted: string[]; commit: () => void } {
+  trial(cost: Cost): { gold: number; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
     let gold = 0;
@@ -103,7 +109,10 @@ class Stock {
       gold,
       missing: [...missing].map(([item, quantity]) => ({ item, quantity })),
       crafted,
-      commit: () => overlay.forEach((v, k) => this.stock.set(k, v)),
+      commit: () => {
+        overlay.forEach((v, k) => this.stock.set(k, v));
+        return [...overlay.keys()];
+      },
     };
   }
 }
@@ -144,11 +153,17 @@ const GOAL_BOOST = 3;
 /** Steps with costs the API can't check (ions, XP when tables are missing) count for less. */
 const UNCHECKED_FACTOR = 0.5;
 
+const uniqueMatIds = new WeakMap<ItemQuantity[], string[]>();
+
 function uniqueMat(stock: Stock, inventory: ItemQuantity[], characterId: string, slot: AbilitySlot): string | undefined {
   const suffix = `_${slot.toUpperCase()}`;
   const name = characterId.toUpperCase();
-  return inventory
-    .map((i) => idOf(i.item) ?? '')
+  let ids = uniqueMatIds.get(inventory);
+  if (!ids) {
+    ids = inventory.map((i) => idOf(i.item) ?? '').filter((id) => id.startsWith(UNIQUE_MAT + '_'));
+    uniqueMatIds.set(inventory, ids);
+  }
+  return ids
     .find((id) => id.startsWith(UNIQUE_MAT + '_') && id.endsWith(suffix) && name.includes(id.slice(UNIQUE_MAT.length + 1, -suffix.length)) && stock.has(id) > 0);
 }
 
@@ -352,8 +367,23 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     goal: e.forGoal ? targets[e.cur.c.info.id]?.why : undefined,
   });
 
+  // A cursor's options only change when it is upgraded or when an item it looked at is used,
+  // so evaluations are reused between rounds instead of recomputed for the whole roster.
+  const cache = new Map<Cursor, { evals: ReturnType<typeof evaluate>; reads: Set<string> }>();
+  const evaluated = (cur: Cursor) => {
+    let hit = cache.get(cur);
+    if (!hit) {
+      const reads = new Set<string>();
+      stock.reads = reads;
+      hit = { evals: evaluate(cur), reads };
+      stock.reads = undefined;
+      cache.set(cur, hit);
+    }
+    return hit.evals;
+  };
+
   while (steps.length < maxSteps) {
-    const doable = cursors.flatMap(evaluate).filter((e) => !e.trial.missing.length);
+    const doable = cursors.flatMap(evaluated).filter((e) => !e.trial.missing.length);
     if (!doable.length) break;
     const best = doable.reduce((a, b) => (b.score > a.score ? b : a));
     const day = dayFor(goldUsed + best.trial.gold);
@@ -361,15 +391,17 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       stoppedBy = 'gold';
       break;
     }
-    best.trial.commit();
+    const used = best.trial.commit();
     best.o.apply(best.cur);
+    cache.delete(best.cur);
+    for (const [cur, hit] of cache) if (used.some((item) => hit.reads.has(item))) cache.delete(cur);
     goldUsed += best.trial.gold;
     steps.push({ ...toStep(best, best.o.unchecked ? 'unchecked' : 'ready'), day });
   }
   if (steps.length >= maxSteps) stoppedBy = 'limit';
 
   const blocked = cursors
-    .map((cur) => evaluate(cur).filter((e) => e.trial.missing.length).sort((a, b) => b.score - a.score)[0])
+    .map((cur) => evaluated(cur).filter((e) => e.trial.missing.length).sort((a, b) => b.score - a.score)[0])
     .filter((e): e is NonNullable<typeof e> => !!e)
     .sort((a, b) => b.score - a.score)
     .map((e) => toStep(e, 'short'));

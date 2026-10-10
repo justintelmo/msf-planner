@@ -99,7 +99,15 @@ function eventReasons(c: OwnedCharacter, events: EventInfo[], weights: Record<st
   return reasons;
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+const normCache = new Map<string, string>();
+const norm = (s: string) => {
+  let n = normCache.get(s);
+  if (n === undefined) {
+    n = s.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+    normCache.set(s, n);
+  }
+  return n;
+};
 
 /** Matches a curated name to a character by id, display name, or the name without its "(Variant)" suffix. */
 function findCharacter(key: string, owned: OwnedCharacter[]): OwnedCharacter | undefined {
@@ -158,10 +166,10 @@ export function rankCharacters(input: RankInput): Ranked[] {
   // Characters whose traits fit many unlock events and Dark Dimensions keep paying off.
   if (input.contentFilters?.length) {
     const traited = input.contentFilters
-      .map((s) => ({ ...s, filters: s.filters.filter((f) => f.allTraits?.length || f.anyTraits?.length || f.anyCharacters?.length) }))
+      .map((s) => ({ ...s, filters: s.filters.filter((f) => f.allTraits?.length || f.anyTraits?.length || f.anyCharacters?.length).map(looseOf) }))
       .filter((s) => s.filters.length);
     for (const c of input.owned) {
-      const fits = traited.filter((s) => s.filters.some((f) => matchesFilter(c, looseOf(f)))).length;
+      const fits = traited.filter((s) => s.filters.some((f) => matchesFilter(c, f))).length;
       if (fits >= 3) {
         add(c.info.id, { label: `Fits ${fits} unlock events and Dark Dimensions`, weight: Math.min(VERSATILITY_CAP, fits * VERSATILITY_STEP) });
       }

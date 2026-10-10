@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { Activity, lazy, Suspense, useState, type ReactNode } from 'react';
 import { plainName } from './planner/export';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ErrorBoundary from './ErrorBoundary';
@@ -77,11 +77,12 @@ export default function App() {
         {!snapshot ? (
           <p className="muted">Loading your account…</p>
         ) : (
+          <>
           <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<p className="muted" role="status">Loading…</p>}>
           <Routes>
-            <Route path="/goals" element={<Goals snapshot={snapshot} />} />
-            <Route path="/plan" element={<Plan snapshot={snapshot} />} />
+            <Route path="/goals" element={null} />
+            <Route path="/plan" element={null} />
             <Route path="/roster" element={<Roster snapshot={snapshot} />} />
             <Route path="/events" element={<Events snapshot={snapshot} />} />
  <Route path="/dd" element={<DarkDimension snapshot={snapshot} />} />
@@ -90,8 +91,29 @@ export default function App() {
           </Routes>
           </Suspense>
           </ErrorBoundary>
+          <KeepAlive path="/goals" pathname={pathname}><Goals snapshot={snapshot} /></KeepAlive>
+          <KeepAlive path="/plan" pathname={pathname}><Plan snapshot={snapshot} /></KeepAlive>
+          </>
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * Keeps a heavy tab's state after its first visit, so switching back doesn't recompute it.
+ * While hidden, React defers its updates and pauses its effects (Activity).
+ */
+function KeepAlive({ path, pathname, children }: { path: string; pathname: string; children: ReactNode }) {
+  const active = pathname === path;
+  const [seen, setSeen] = useState(active);
+  if (active && !seen) setSeen(true);
+  if (!seen) return null;
+  return (
+    <Activity mode={active ? 'visible' : 'hidden'}>
+      <ErrorBoundary>
+        <Suspense fallback={<p className="muted" role="status">Loading…</p>}>{children}</Suspense>
+      </ErrorBoundary>
+    </Activity>
   );
 }
