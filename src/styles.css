@@ -186,3 +186,7 @@ details > summary { cursor: pointer; }
 .param-grid label { display: flex; flex-direction: column; gap: 3px; }
 .param-grid select, .param-grid input { width: 100%; box-sizing: border-box; }
 .params code { word-break: break-all; }
+.stores { margin-bottom: 12px; }
+.stores[open] > summary { margin-bottom: 8px; }
+.store-row { align-items: end; padding: 8px 0; border-bottom: 1px solid var(--border, rgba(127,127,127,.2)); }
+.amount select { width: 100%; box-sizing: border-box; }

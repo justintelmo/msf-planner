@@ -121,4 +121,15 @@ describe('buildSchedule', () => {
     expect(iso.uses).toContainEqual({ item: 'ISO8-TIER-2-C-CURRENCY', quantity: 74_800 + 5 * 513_000 });
     expect(iso.uses).toContainEqual({ item: id('DAMAGE', 14), quantity: 3 });
   });
+
+  it('buys missing shards with store currency on hand', () => {
+    const s = buildSchedule({
+      owned: [hero('A', { activeYellow: 5 })],
+      inventory: [{ item: 'SHARD_A', quantity: 50 }, { item: 'STORE_CURRENCY_ch', quantity: 10_000 }, { item: 'SC', quantity: 0 }],
+      upgrades, levelCap: 100, priority: { A: 40 },
+      recipes: { SHARD_A: [{ item: 'STORE_CURRENCY_ch', quantity: 40 }] },
+    });
+    const star = s.steps.find((x) => x.title === 'Promote 5★ → 6★')!;
+    expect(star.uses).toContainEqual({ item: 'STORE_CURRENCY_ch', quantity: 150 * 40 });
+  });
 });

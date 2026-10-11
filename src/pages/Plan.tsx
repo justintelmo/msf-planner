@@ -13,6 +13,9 @@ import { isMetRaid, modeReports, useModeGoals } from '../data/modeGoals';
 import { GOLD_ID, useWallet } from '../data/wallet';
 import Currencies, { withTypedAmounts } from './Currencies';
 import SyncReview from './SyncReview';
+import StoresPanel from './StoresPanel';
+import { useStores } from '../data/stores';
+import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
@@ -126,7 +129,9 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     });
     return m;
   }, [owned]);
-  const label = (id: string) => itemLabel(id, (key) => names.get(key));
+  const stores = useDeferredValue(useStores());
+  const label = (id: string) =>
+    stores.currencies.find((c) => currencyItem(c.id) === id)?.name ?? itemLabel(id, (key) => names.get(key));
   const nameOf = (id: string) => names.get(id) ?? id;
 
   const [modeOrder, setModeOrder] = useState<string[]>(() => withAllModes(readJson(localStorage, MODES_KEY) ?? DEFAULT_MODE_ORDER));
@@ -143,8 +148,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const goldPerDay = useDeferredValue(wallet.goldPerDay);
   const ionKey = useDeferredValue(JSON.stringify(Object.entries(wallet.amounts).filter(([id]) => id.startsWith('ISO8-'))));
   const inventory = useMemo(
-    () => withTypedAmounts(snapshot.inventory, Object.fromEntries(JSON.parse(ionKey) as [string, number][])),
-    [snapshot.inventory, ionKey],
+    () => [...withTypedAmounts(snapshot.inventory, Object.fromEntries(JSON.parse(ionKey) as [string, number][])), ...storeInventory(stores)],
+    [snapshot.inventory, ionKey, stores],
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
@@ -196,9 +201,18 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildSchedule({
       owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
-      gearTiers, recipes, targets, modeTags, modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
+      gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, targets, modeTags,
+      modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
     });
-  }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days]);
+  }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores]);
+  // Days of store income a blocked step still needs, from the store currency it's short of.
+  const storeDays = (missing: { item: string; quantity: number }[]) => {
+    const waits = stores.currencies.flatMap((c) => {
+      const short = missing.find((m) => m.item === currencyItem(c.id));
+      return short && c.perDay ? [`≈${Math.ceil(short.quantity / c.perDay)} days of ${c.name}`] : [];
+    });
+    return waits.join(', ');
+  };
   const byDay = useMemo(() => {
     const groups = new Map<string, ScheduledStep[]>();
     for (const st of schedule.steps) {
@@ -270,6 +284,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         targetsFor={(o) => goalTargets([...goalReports(goals, catalog, o), ...modeReports(modeGoals, catalog, o, snapshot.squads ?? {})], nameOf)}
       />
       <Currencies inventory={snapshot.inventory} upgrades={snapshot.upgrades ?? SAMPLE_UPGRADES} label={label} />
+      <StoresPanel owned={owned} nameOf={nameOf} />
       <details className="card settings" open={settingsOpen} onToggle={(e) => setSettingsOpen((e.target as HTMLDetailsElement).open)}>
         <summary>
           <strong>Settings</strong>{' '}
@@ -453,6 +468,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
               <li key={i} className="small">
                 <strong>{nameOf(s.characterId)}</strong>: {s.title}{s.goal && <span className="pill goal"> {s.goal}</span>}
                 <span className="muted"> · needs {formatCost(s.missing, label)}</span>
+                {storeDays(s.missing) && <span className="small"> · {storeDays(s.missing)}</span>}
               </li>
             ))}
           </ol>
