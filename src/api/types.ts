@@ -12,7 +12,7 @@ export interface ApiResponse<T> {
 }
 
 export type Trait = string | { id: string; name?: string };
-export type Item = string | { id: string; name?: string; icon?: string; characterId?: string };
+export type Item = string | { id: string; name?: string; icon?: string; characterId?: string; /** With pieceDirectCost: what crafting or fusing one takes. */ directCost?: ApiCost };
 
 export interface CharacterInfo {
   id: string;
@@ -142,8 +142,13 @@ export interface UpgradeTables {
   yellowStarTotalCosts: Record<string, Cost>;
   /** ISO-8 class level → cost to reach that level. */
   iso8AbilityUpgradeCosts: Record<IsoClass, Record<string, Cost>>;
-  /** Crystal fuse costs: role (controller, …) → crystal slot (damage, …) → crystal level → cost. */
+  /**
+   * Role (controller, …) → crystal slot (damage, …) → crystal level 1-20 → the crystal to equip
+   * there (e.g. ISOITEM_PURPLE_CONTROLLER_DAMAGE_12). Levels 1-5 are T1 (green), 6-10 T2, 11-15 T3, 16-20 T4.
+   */
   iso8FuseCosts?: Record<string, Record<string, Record<string, Cost>>>;
+  /** Crystal id → fuse recipe: three of the level below plus ions. Each tier's level 1 has none. */
+  iso8CrystalRecipes?: Record<string, Cost>;
   /** Matrix tier (2 = blue, 3 = purple) → cost. */
   iso8MatrixUpgradeCosts?: Record<string, Cost>;
   /** Matrix tier → minimum character level. */

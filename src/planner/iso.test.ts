@@ -3,10 +3,10 @@ import type { CharacterInstance, UpgradeTables } from '../api/types';
 import upgradeTables from '../data/upgradeTables.json';
 import { crystalPlan, crystalsOf } from './iso';
 
-const fuse = (n: number) => Object.fromEntries(Array.from({ length: 15 }, (_, i) => [String(i + 1), [{ item: `CRYSTAL_${i + 1}`, quantity: n }, { item: 'SC', quantity: 1000 }]]));
+const fuse = (slot: string) => Object.fromEntries(Array.from({ length: 20 }, (_, i) => [String(i + 1), [{ item: `CRYSTAL_${slot}_${i + 1}`, quantity: 1 }]]));
 const upgrades: UpgradeTables = {
   ...(upgradeTables as UpgradeTables),
-  iso8FuseCosts: { controller: { health: fuse(1), damage: fuse(1), armor: fuse(1), focus: fuse(1), resist: fuse(1) } },
+  iso8FuseCosts: { controller: Object.fromEntries(['health', 'damage', 'armor', 'focus', 'resist'].map((s) => [s, fuse(s)])) },
   iso8MatrixUpgradeCosts: { '2': [{ item: 'MATRIX_BLUE', quantity: 1 }], '3': [{ item: 'MATRIX_PURPLE', quantity: 1 }] },
   iso8MatrixLevelRequirements: { '2': 50, '3': 75 },
 };
@@ -20,15 +20,16 @@ describe('crystals', () => {
     });
   });
 
-  it('charges fusing every short crystal and the next matrix before the class level', () => {
-    // Blue matrix, all crystals at pip 5 (level 10); class level 11 needs purple and pip 1 on all five.
-    const c = crystalsOf(inst({ matrix: 'blue', health: 5, damage: 5, armor: 5, focus: 5, resist: 5, active: 'striker', striker: 10 }), 10);
+  it('charges one target crystal per short slot and the next matrix before the class level', () => {
+    // Blue matrix with damage at pip 5 and the rest at pip 4; class level 11 needs purple and pip 1 on all five.
+    const c = crystalsOf(inst({ matrix: 'blue', health: 4, damage: 5, armor: 4, focus: 4, resist: 4, active: 'striker', striker: 9 }), 9);
     const plan = crystalPlan(upgrades, whiplash, c, 11);
     expect(plan.cost).toEqual(expect.arrayContaining([
-      { item: 'CRYSTAL_11', quantity: 5 }, { item: 'MATRIX_PURPLE', quantity: 1 }, { item: 'SC', quantity: 5000 },
+      { item: 'CRYSTAL_damage_11', quantity: 1 }, { item: 'CRYSTAL_health_11', quantity: 1 }, { item: 'MATRIX_PURPLE', quantity: 1 },
     ]));
+    expect(plan.cost.some((x) => x.item.endsWith('_10'))).toBe(false);
     expect(plan.levelRequired).toBe(75);
-    expect(plan.detail).toContain('5 crystals to purple pip 1');
+    expect(plan.detail).toContain('5 T3 level 1 crystals');
   });
 
   it('says so when the role or tables are unknown', () => {

@@ -13,7 +13,10 @@ export function itemLabel(id: string, characterName: (id: string) => string | un
   const unique = /^ABILITY_MATERIAL_UNIQUE_ABILITY_MAT_(.+)$/.exec(id);
   if (unique) return `unique ability mat (${titleCase(unique[1])})`;
   const ions = /^ISO8-TIER-(\d)(?:-([A-C]))?-CURRENCY$/.exec(id);
-  if (ions) return `T${Number(ions[1]) + 1}${ions[2] ? ` level ${'ABC'.indexOf(ions[2]) + 1}` : ''} ions`;
+  // Ion levels as the game names them: A covers levels 1-3, B level 4, C level 5.
+  if (ions) return `T${Number(ions[1]) + 1}${ions[2] ? ` level ${{ A: 1, B: 4, C: 5 }[ions[2]]}` : ''} ions`;
+  const crystal = /^ISOITEM_([A-Z]+)_([A-Z]+)_([A-Z]+)_(\d+)$/.exec(id);
+  if (crystal) return `${TIER[crystal[1]] ?? crystal[1]} ${titleCase(crystal[2])} ${titleCase(crystal[3])} level ${((Number(crystal[4]) - 1) % 5) + 1} crystal`;
   return titleCase(id.replace(/^GEAR_/, ''));
 }
 

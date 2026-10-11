@@ -23,7 +23,7 @@ export interface Snapshot {
   version?: number;
 }
 
-const SNAPSHOT_VERSION = 4;
+const SNAPSHOT_VERSION = 5;
 
 export type Mode = 'live' | 'demo' | null;
 

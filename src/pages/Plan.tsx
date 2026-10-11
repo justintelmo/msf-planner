@@ -422,8 +422,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
                   {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
                   <span className="muted small">
-                    {' · '}{formatCost(s.cost.filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC'), label) || 'no materials'}
-                    {s.crafted && ` · crafts ${s.crafted.length} piece${s.crafted.length > 1 ? 's' : ''}`}
+                    {' · '}{formatCost((s.uses ?? s.cost).filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC'), label) || 'no materials'}
+                    {s.crafted && ` · crafts ${s.crafted.length} ${s.kind === 'iso' ? 'crystal' : 'piece'}${s.crafted.length > 1 ? 's' : ''}`}
                     {s.gold > 0 && ` · ${compact(s.gold)} gold`}
                   </span>
                   {s.detail && <div className="muted small">{s.detail}</div>}

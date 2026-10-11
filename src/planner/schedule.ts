@@ -41,8 +41,10 @@ export interface ScheduledStep extends Step {
   /** 0 = affordable now; N = after N days of income. Undefined when gold is unknown. */
   day?: number;
   gold: number;
-  /** Gear pieces this step crafts from materials. */
+  /** Gear pieces and crystals this step crafts from materials. */
   crafted?: string[];
+  /** What it takes from the inventory, including the materials crafting and fusing use. */
+  uses?: Cost;
   score: number;
 }
 
@@ -81,23 +83,31 @@ class Stock {
   }
 
   /** What taking `cost` would use, crafting missing pieces when a recipe exists. */
-  trial(cost: Cost): { gold: number; share: number; missing: Cost; crafted: string[]; commit: () => string[] } {
+  trial(cost: Cost): { gold: number; share: number; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
     let gold = 0;
     // The largest share of any one material's stock this uses: 0.5 = half of the scarcest one.
     let share = 0;
     const missing = new Map<string, number>();
+    // Everything taken from the inventory, including what crafting and fusing ate.
+    const usedItems = new Map<string, number>();
     const crafted: string[] = [];
     const take = (item: string, qty: number, depth: number) => {
       if (item === GOLD) {
         gold += qty;
         return;
       }
+      // Without any ion balances, ions can't be checked: show them as used but never as missing.
+      if (!this.ions.length && item.startsWith(ION_PREFIX)) {
+        usedItems.set(item, (usedItems.get(item) ?? 0) + qty);
+        return;
+      }
       const have = get(item);
       const used = Math.min(have, qty);
       if (used) {
         overlay.set(item, have - used);
+        usedItems.set(item, (usedItems.get(item) ?? 0) + used);
         share = Math.max(share, used / Math.max(1, this.has(item)));
       }
       const rest = qty - used;
@@ -114,6 +124,7 @@ class Stock {
     return {
       gold,
       share,
+      used: [...usedItems].map(([item, quantity]) => ({ item, quantity })),
       missing: [...missing].map(([item, quantity]) => ({ item, quantity })),
       crafted,
       commit: () => {
@@ -297,7 +308,8 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
     const table = upgrades.iso8AbilityUpgradeCosts[cls] ?? {};
     const goalIso = input.targets?.[id]?.target.iso8ClassLevel ?? 0;
     const blind = !stock.holdsAny(ION_PREFIX);
-    const to = blind ? Math.max(cur.isoLevel + 1, goalIso) : cur.isoLevel + 1;
+    // Go straight to a goal level: crystals are fused directly to it, not through every level in between.
+    const to = blind || goalIso > cur.isoLevel ? Math.max(cur.isoLevel + 1, goalIso) : cur.isoLevel + 1;
     const lvls = Object.keys(table).map(Number).filter((l) => l > cur.isoLevel && l <= to);
     if (lvls.length && (!blind || cur.blindIso < 1) && table[to]) {
       // The crystals have to reach the new level first (see iso.ts).
@@ -352,7 +364,8 @@ const current = (cur: Cursor, field: keyof Target): number =>
  * spending is placed on days using gold on hand plus daily income.
  */
 export function buildSchedule(input: ScheduleInput): Schedule {
-  const stock = new Stock(input.inventory, input.recipes ?? {});
+  // Gear recipes and crystal fuse recipes both craft from what's in the inventory.
+  const stock = new Stock(input.inventory, { ...input.upgrades.iso8CrystalRecipes, ...input.recipes });
   const targets = input.targets ?? {};
   const cursors = input.owned
     .filter((c) => (input.priority[c.info.id] ?? 0) > 0 || targets[c.info.id])
@@ -389,7 +402,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
   const toStep = (e: ReturnType<typeof evaluate>[number], status: Step['status']): ScheduledStep => ({
     characterId: e.cur.c.info.id, kind: e.o.kind, title: e.o.title, detail: [e.o.detail, e.o.unchecked].filter(Boolean).join(' ') || undefined,
     cost: e.o.cost, missing: e.trial.missing, status, gold: e.trial.gold, score: e.score,
-    crafted: e.trial.crafted.length ? e.trial.crafted : undefined, modeEffects: e.o.modeEffects,
+    crafted: e.trial.crafted.length ? e.trial.crafted : undefined, uses: e.trial.used, modeEffects: e.o.modeEffects,
     goal: e.forGoal ? targets[e.cur.c.info.id]?.why : undefined,
   });
 

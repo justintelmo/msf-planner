@@ -3,6 +3,7 @@ import type { AbilityKit } from '../planner/modeTags';
 import { accessToken, logout } from '../auth/auth';
 import {
   flattenCost,
+  idOf,
   type ApiCost,
   type Cost,
   type Item,
@@ -184,18 +185,21 @@ export const msfApi = {
     const small = { itemFormat: 'id', pieceInfo: 'none', pieceDirectCost: 'none', pieceFlatCost: 'none', subPieceInfo: 'none', lang: 'none' };
     const field = async <T>(name: string, extra: Record<string, string> = {}) =>
       (await get<T>(`/game/v1/upgradeData/${name}`, { ...small, ...extra })).data;
-    // Crystal fuse costs are the biggest table; if it's still too large, ask for one role at a time.
-    const readFuseCosts = async () => {
+    // Crystal fuse costs: each level's cost is one crystal of that level, whose recipe (three of the
+    // level below plus ions) comes as its directCost. Ask for item objects (to keep those recipes)
+    // but no other metadata; if that's still too large, one role at a time.
+    type Fuse = Record<string, Nested<{ item: Item; quantity?: number }[]>>;
+    const fuseParams = { itemFormat: 'object', pieceInfo: 'none', pieceDirectCost: 'part', pieceFlatCost: 'none', subPieceInfo: 'none', lang: 'none' };
+    const readFuseCosts = async (): Promise<Fuse> => {
+      const read = (extra: Record<string, string> = {}) => get<Fuse>('/game/v1/upgradeData/iso8FuseCosts', { ...fuseParams, ...extra });
       try {
-        return await field<Record<string, Nested<ApiCost>>>('iso8FuseCosts');
+        return (await read()).data;
       } catch (e) {
         if (!(e instanceof ApiError) || e.status !== 472) throw e;
         const roles = await Promise.all(
-          ['blaster', 'brawler', 'controller', 'protector', 'support'].map(async (r) =>
-            [r, (await field<Record<string, Nested<ApiCost>>>('iso8FuseCosts', { flexFields: r }))?.[r]] as const,
-          ),
+          ['blaster', 'brawler', 'controller', 'protector', 'support'].map(async (r) => [r, (await read({ flexFields: r })).data?.[r]] as const),
         );
-        return Object.fromEntries(roles.filter(([, v]) => v));
+        return Object.fromEntries(roles.filter(([, v]) => v)) as Fuse;
       }
     };
     const [abilityCosts, abilityReqs, starShards, starCosts, isoCosts, xpCosts, levelXp, fuseCosts, matrixCosts, matrixReqs] = await Promise.all([
@@ -219,7 +223,7 @@ export const msfApi = {
       iso8AbilityUpgradeCosts: mapValues(isoCosts, (lv) => mapValues(lv, flattenCost)) as UpgradeTables['iso8AbilityUpgradeCosts'],
       characterXpCosts: xpCosts?.map((x) => ({ xpReward: x.xpReward, cost: flattenCost(x.cost) })),
       characterLevelTotalXp: levelXp,
-      iso8FuseCosts: fuseCosts && mapValues(fuseCosts, (slots) => mapValues(slots, (lv) => mapValues(lv, flattenCost))),
+      ...splitFuseCosts(fuseCosts),
       iso8MatrixUpgradeCosts: matrixCosts && mapValues(matrixCosts, flattenCost),
       iso8MatrixLevelRequirements: matrixReqs,
     };
@@ -373,3 +377,22 @@ export const msfApi = {
     return data.map((c) => ({ ...c, portrait: resolveImg(c.portrait, meta?.baseImgUrl) }));
   },
 };
+
+/** Crystal ids per role, slot and level, plus each crystal's fuse recipe (lower crystals and ions). */
+export function splitFuseCosts(raw: Record<string, Nested<{ item: Item; quantity?: number }[]>> | undefined): Pick<UpgradeTables, 'iso8FuseCosts' | 'iso8CrystalRecipes'> {
+  if (!raw) return {};
+  const recipes: Record<string, Cost> = {};
+  const costs = mapValues(raw, (slots) =>
+    mapValues(slots, (levels) =>
+      mapValues(levels, (entries) =>
+        entries.map(({ item, quantity }) => {
+          const id = idOf(item) ?? '';
+          const direct = typeof item === 'object' ? item.directCost : undefined;
+          if (id && direct?.length) recipes[id] = flattenCost(direct);
+          return { item: id, quantity: quantity ?? 1 };
+        }),
+      ),
+    ),
+  );
+  return { iso8FuseCosts: costs, iso8CrystalRecipes: recipes };
+}

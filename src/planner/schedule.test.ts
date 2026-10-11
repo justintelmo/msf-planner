@@ -99,4 +99,26 @@ describe('buildSchedule', () => {
     }).steps.find((x) => x.title === 'Ultimate 5 → 6')!;
     expect(run(130).score).toBeLessThan(run(13_000).score * 0.6);
   });
+
+  it('fuses the crystals an ISO level needs and lists everything fusing uses', () => {
+    const slots = ['HEALTH', 'DAMAGE', 'ARMOR', 'FOCUS', 'RESIST'];
+    const id = (sl: string, l: number) => `ISOITEM_PURPLE_CONTROLLER_${sl}_${l}`;
+    const s = buildSchedule({
+      owned: [{
+        info: { id: 'X', name: 'X', traits: ['Controller'], unlockStars: 3 },
+        instance: { ...hero('X').instance!, iso8: { matrix: 'purple', health: 4, damage: 4, armor: 4, focus: 4, resist: 4, active: 'striker', striker: 14 } as never },
+      }],
+      inventory: [...slots.map((sl) => ({ item: id(sl, 14), quantity: 3 })), { item: 'ISO8-TIER-2-C-CURRENCY', quantity: 5_000_000 }],
+      upgrades: {
+        ...upgrades,
+        iso8FuseCosts: { controller: Object.fromEntries(slots.map((sl) => [sl.toLowerCase(), { '15': [{ item: id(sl, 15), quantity: 1 }] }])) },
+        iso8CrystalRecipes: Object.fromEntries(slots.map((sl) => [id(sl, 15), [{ item: id(sl, 14), quantity: 3 }, { item: 'ISO8-TIER-2-C-CURRENCY', quantity: 513_000 }]])),
+      },
+      levelCap: 100, priority: { X: 40 },
+    });
+    const iso = s.steps.find((x) => x.kind === 'iso')!;
+    expect(iso.crafted).toHaveLength(5);
+    expect(iso.uses).toContainEqual({ item: 'ISO8-TIER-2-C-CURRENCY', quantity: 74_800 + 5 * 513_000 });
+    expect(iso.uses).toContainEqual({ item: id('DAMAGE', 14), quantity: 3 });
+  });
 });
