@@ -90,4 +90,13 @@ describe('buildSchedule', () => {
     expect(s.steps[0].goal).toBe('For Odin');
     expect(s.blocked[0].characterId).toBe('A');
   });
+
+  it('ranks a step lower when it uses up a scarce material', () => {
+    const run = (purple: number) => buildSchedule({
+      owned: [hero('A', { ultimate: 5 })],
+      inventory: [{ item: 'ABILITY_MATERIAL_PURPLE_ABILITY_MAT', quantity: purple }],
+      upgrades, levelCap: 100, priority: { A: 40 },
+    }).steps.find((x) => x.title === 'Ultimate 5 → 6')!;
+    expect(run(130).score).toBeLessThan(run(13_000).score * 0.6);
+  });
 });

@@ -81,10 +81,12 @@ class Stock {
   }
 
   /** What taking `cost` would use, crafting missing pieces when a recipe exists. */
-  trial(cost: Cost): { gold: number; missing: Cost; crafted: string[]; commit: () => string[] } {
+  trial(cost: Cost): { gold: number; share: number; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
     let gold = 0;
+    // The largest share of any one material's stock this uses: 0.5 = half of the scarcest one.
+    let share = 0;
     const missing = new Map<string, number>();
     const crafted: string[] = [];
     const take = (item: string, qty: number, depth: number) => {
@@ -94,7 +96,10 @@ class Stock {
       }
       const have = get(item);
       const used = Math.min(have, qty);
-      if (used) overlay.set(item, have - used);
+      if (used) {
+        overlay.set(item, have - used);
+        share = Math.max(share, used / Math.max(1, this.has(item)));
+      }
       const rest = qty - used;
       if (!rest) return;
       const recipe = this.recipes[item];
@@ -108,6 +113,7 @@ class Stock {
     cost.forEach((c) => take(c.item, c.quantity, 0));
     return {
       gold,
+      share,
       missing: [...missing].map(([item, quantity]) => ({ item, quantity })),
       crafted,
       commit: () => {
@@ -156,6 +162,8 @@ const VALUE = { gear: 10, stars: 8, unlock: 12, iso: 4, level: 2, levelUnlocksAb
 const GOAL_BOOST = 3;
 /** Steps with costs the API can't check (ions, XP when tables are missing) count for less. */
 const UNCHECKED_FACTOR = 0.5;
+/** Gold that counts as much as using up one material's whole stock. */
+const GOLD_UNIT = 250_000;
 
 const uniqueMatIds = new WeakMap<ItemQuantity[], string[]>();
 
@@ -369,8 +377,11 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       // Unchecked costs (ions without balances) only charge their gold.
       const trial = stock.trial(o.checkable ?? (o.unchecked ? o.cost.filter((c) => c.item === GOLD) : o.cost));
       const forGoal = !!(target && o.goalField && target[o.goalField] !== undefined && current(cur, o.goalField) < (target[o.goalField] as number));
-      const score =
-        (o.value * weight * (forGoal ? GOAL_BOOST : 1) * (o.unchecked ? UNCHECKED_FACTOR : 1)) / (1 + trial.gold / 250_000);
+      // Price is gold plus how much of each material stock it eats (all of one stock ≈ 250K gold),
+      // so cheap-in-gold steps that burn scarce materials or ions don't jump the queue.
+      // Costs that can't be checked (ions without balances) count as one full stock.
+      const price = 1 + trial.gold / GOLD_UNIT + trial.share + (o.unchecked ? 1 : 0);
+      const score = (o.value * weight * (forGoal ? GOAL_BOOST : 1) * (o.unchecked ? UNCHECKED_FACTOR : 1)) / price;
       return { cur, o, trial, score, forGoal };
     });
   };
