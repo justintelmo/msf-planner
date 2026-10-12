@@ -110,7 +110,7 @@ const norm = (s: string) => {
 };
 
 /** Matches a curated name to a character by id, display name, or the name without its "(Variant)" suffix. */
-function findCharacter(key: string, owned: OwnedCharacter[]): OwnedCharacter | undefined {
+export function findCharacter(key: string, owned: OwnedCharacter[]): OwnedCharacter | undefined {
   const k = norm(key);
   return (
     owned.find((c) => c.info.id === key) ??

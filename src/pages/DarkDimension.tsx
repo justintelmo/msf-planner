@@ -5,6 +5,10 @@ import type { Snapshot } from '../data/store';
 import { plainName } from '../planner/export';
 import { checkRequirements, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
+import { DD_GUIDES, guideKey, nodeTeam, type DdGuide } from '../data/ddTeams';
+import { findCharacter } from '../planner/priority';
+import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
+import { TeamAdvice } from './DdTeams';
 
 /** Rooms in map order: ray by ray, shallow to deep. */
 function roomOrder(dd: DD): string[] {
@@ -133,6 +137,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   if (error) return <p className="error">{error}</p>;
   if (!list) return <p className="muted">Loading Dark Dimensions…</p>;
 
+  const guide = dd ? DD_GUIDES[guideKey(dd.id, plainName(dd.name ?? '')) ?? ''] : undefined;
   const req = requirementsOf(room ?? dd?.rooms?.[roomId]);
   const check = req ? checkRequirements(roster, req) : null;
 
@@ -153,6 +158,8 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
       {!dd ? (
         <p className="muted">Loading map…</p>
       ) : (
+        <>
+        {guide && <GuideOverview guide={guide} roster={roster} />}
         <div className="dd-layout">
           <ol className="rooms">
             {roomOrder(dd).map((id) => {
@@ -192,6 +199,15 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
                     )}
                   </div>
                 )}
+                {(() => {
+                  const team = nodeTeam(guide, plainName(room.name ?? ''));
+                  return team ? (
+                    <div className="card">
+                      <p className="small"><strong>Recommended team</strong> <span className="muted">· {team.rule} · <a href={guide!.source} target="_blank" rel="noreferrer">Marvel Church</a></span></p>
+                      <TeamAdvice team={team} roster={roster} eligible={new Set(check?.eligible.map((c) => c.info.id))} />
+                    </div>
+                  ) : null;
+                })()}
                 <Waves title="Enemies" waves={room.combat?.right?.waves} />
                 <Waves title="Your side (preset units)" waves={room.combat?.left?.waves} />
                 {!room.combat && <p className="muted small">This room has no combat details.</p>}
@@ -200,7 +216,35 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
             )}
           </div>
         </div>
+        </>
       )}
     </section>
+  );
+}
+
+/** Every mission range's team from the guide, so the whole Dark Dimension can be planned without opening rooms. */
+function GuideOverview({ guide, roster }: { guide: DdGuide; roster: OwnedCharacter[] }) {
+  const owned = (names: string[]) => names.filter((n) => {
+    const c = findCharacter(n, roster);
+    return c && isUnlocked(c);
+  }).length;
+  return (
+    <details className="card dd-guide" open>
+      <summary>
+        <strong>Recommended teams</strong>{' '}
+        <span className="muted small">
+          from <a href={guide.source} target="_blank" rel="noreferrer">Marvel Church</a>, guide dated {guide.updated}
+        </span>
+      </summary>
+      {guide.nodes.map((t) => (
+        <details key={t.from} className="guide-range">
+          <summary>
+            <strong>{t.from === t.to ? `Mission ${t.from}` : `Missions ${t.from}–${t.to}`}</strong>{' '}
+            <span className="muted small">{t.rule}{t.main.length ? ` · you own ${owned(t.main)} of ${t.main.length}` : ''}</span>
+          </summary>
+          <TeamAdvice team={t} roster={roster} />
+        </details>
+      ))}
+    </details>
   );
 }

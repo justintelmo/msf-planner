@@ -258,3 +258,10 @@ details > summary { cursor: pointer; }
 .picker-who img, .picker-who .ph { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--bg); flex: none; }
 .shortages { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
 .item-chip.shard img { border-radius: 50%; object-fit: cover; }
+/* Dark Dimension team advice. */
+.team-picks { list-style: none; padding: 0; margin: 6px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 6px 12px; }
+.team-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+.team-pick.unowned { opacity: .6; }
+.dd-guide > summary { cursor: pointer; }
+.dd-guide .guide-range { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.dd-guide .guide-range h3 { margin: 0; font-size: 14px; }
