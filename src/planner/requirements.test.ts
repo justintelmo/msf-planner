@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkRequirements, matchesFilter, type OwnedCharacter } from './requirements';
+import { activeGoals, checkRequirements, matchesFilter, type OwnedCharacter } from './requirements';
 
 const char = (id: string, traits: string[], yellow: number, gear: number, power = 100): OwnedCharacter => ({
   info: { id, traits },
@@ -42,5 +42,18 @@ describe('checkRequirements', () => {
     const r = checkRequirements(roster, { minCharacters: 3, anyCharacterFilters: [{ anyTraits: ['Hero'] }] });
     expect(r.eligible).toHaveLength(2);
     expect(r.met).toBe(false);
+  });
+});
+
+describe('activeGoals', () => {
+  const roster: OwnedCharacter[] = [
+    { info: { id: 'Odin' }, instance: { id: 'Odin', activeYellow: 5 } },
+    { info: { id: 'Xavier' }, instance: { id: 'Xavier', activeYellow: 0 } },
+    { info: { id: 'BlueMarvel' } },
+  ];
+  it('drops unlocked characters only when hiding finished goals', () => {
+    const goals = ['Odin', 'BlueMarvel', 'Xavier'];
+    expect(activeGoals(goals, roster, true)).toEqual(['BlueMarvel', 'Xavier']);
+    expect(activeGoals(goals, roster, false)).toEqual(goals);
   });
 });

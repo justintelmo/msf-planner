@@ -221,3 +221,11 @@ details > summary { cursor: pointer; }
 .chapter > summary { cursor: pointer; }
 .chapter .rung.met { color: var(--ok); }
 .chapter .rung.open { color: var(--warn); }
+/* Goals: add-a-character autocomplete. */
+.picker { position: relative; margin-bottom: 8px; }
+.picker input { width: 100%; box-sizing: border-box; }
+.picker-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 6; list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); max-height: 60vh; overflow-y: auto; }
+.picker-list li[role="option"] { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.picker-list li.active { background: var(--bg); }
+.picker-list li[role="option"] .small { text-align: right; }
+.picker-hint { padding: 4px 10px; }

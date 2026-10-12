@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Snapshot } from '../data/store';
-import { goalReports, loadCatalog, setGoals, useUnlocks, type GoalSourceReport } from '../data/unlocks';
+import { goalReports, loadCatalog, setGoals, setHideDone, useUnlocks, type GoalSourceReport } from '../data/unlocks';
 import { plainName } from '../planner/export';
 import { describeGap } from '../planner/gaps';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
+import GoalPicker from './GoalPicker';
 import ModeTargets from './ModeTargets';
 import { chaptersOf, requirementText, tierMet, tierName } from './SourceLadder';
 
@@ -13,19 +14,9 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
   const roster = useMemo(() => ownedCharacters(snapshot), [snapshot]);
   const byId = useMemo(() => new Map(roster.map((c) => [c.info.id, c])), [roster]);
   const nameOf = (id: string) => plainName(byId.get(id)?.info.name ?? id);
-  const { catalog, progress, goals } = useUnlocks();
-  const [query, setQuery] = useState('');
+  const { catalog, progress, goals, hideDone } = useUnlocks();
 
-  // Every character some content can reward, locked ones first.
-  const rewardable = useMemo(() => {
-    const ids = new Set((catalog?.sources ?? []).flatMap((s) => s.rewards));
-    return [...ids]
-      .filter((id) => byId.has(id))
-      .sort((a, b) => Number(isUnlocked(byId.get(a)!)) - Number(isUnlocked(byId.get(b)!)) || nameOf(a).localeCompare(nameOf(b)));
-  }, [catalog, byId]);
-  const matches = query
-    ? roster.filter((c) => !goals.includes(c.info.id) && nameOf(c.info.id).toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : [];
+  const doneCount = goals.filter((g) => { const c = byId.get(g); return c && isUnlocked(c); }).length;
   const reports = useMemo(() => goalReports(goals, catalog, roster), [goals, catalog, roster]);
 
   const move = (i: number, d: number) => {
@@ -98,25 +89,19 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
       <ModeTargets catalog={catalog} />
 
       <h2>Your goals</h2>
-      <div className="toolbar">
-        <input placeholder="Add a character, e.g. Odin" value={query} onChange={(e) => setQuery(e.target.value)} list="rewardable" />
-        <datalist id="rewardable">{rewardable.map((id) => <option key={id} value={nameOf(id)} />)}</datalist>
-      </div>
-      {matches.length > 0 && (
-        <ul className="matches">
-          {matches.map((c) => (
-            <li key={c.info.id}>
-              <button className="ghost small" onClick={() => { setGoals([...goals, c.info.id]); setQuery(''); }}>
-                + {nameOf(c.info.id)} {isUnlocked(c) ? '(owned)' : ''}
-              </button>
-            </li>
-          ))}
-        </ul>
+      <GoalPicker roster={roster} goals={goals} catalog={catalog} nameOf={nameOf} onPick={(id) => setGoals([...goals, id])} />
+      {doneCount > 0 && (
+        <label className="toggle small">
+          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide unlocked goals ({doneCount})
+        </label>
       )}
       {goals.length === 0 && <p className="muted">No goals yet.</p>}
+      {goals.length > 0 && hideDone && doneCount === goals.length && <p className="muted">Every goal is unlocked. Add another above.</p>}
 
       {reports.map((r, i) => {
         const c = byId.get(r.characterId);
+        if (hideDone && c && isUnlocked(c)) return null;
+        const n = reports.slice(0, i + 1).filter((x) => { const d = byId.get(x.characterId); return !(hideDone && d && isUnlocked(d)); }).length;
         const checks = r.sources.flatMap((x) => x.checks);
         const met = checks.filter((ch) => ch.plan.met).length;
         const open = r.sources.filter((x) => x.checks.some((ch) => !ch.plan.met));
@@ -125,7 +110,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
           <details className="card goal" key={r.characterId}>
             <summary>
               <span className="goal-title">
-                <strong>{i + 1}. {nameOf(r.characterId)}</strong>
+                <strong>{n}. {nameOf(r.characterId)}</strong>
                 {c && isUnlocked(c) && <span className="pill ready">Unlocked</span>}
               </span>
               {catalog && r.sources.length > 0 ? (

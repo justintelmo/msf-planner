@@ -83,3 +83,10 @@ export function checkRequirements(roster: OwnedCharacter[], req: Requirements | 
   const needed = req?.specificCharacters?.length || req?.minCharacters || 5;
   return { eligible, needed, met: eligible.length >= needed };
 }
+
+/** Goals still in play: unlocked characters drop out when hideDone is on. */
+export function activeGoals(goals: string[], roster: OwnedCharacter[], hideDone: boolean): string[] {
+  if (!hideDone) return goals;
+  const done = new Set(roster.filter(isUnlocked).map((c) => c.info.id));
+  return goals.filter((g) => !done.has(g));
+}

@@ -5,6 +5,7 @@ import { readJson, writeJson } from '../auth/storage';
 import { plainName } from '../planner/export';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
 import type { OwnedCharacter } from '../planner/requirements';
+export { activeGoals } from '../planner/requirements';
 import { wantRaidDetail } from './modeGoals';
 import {
   distinctRequirements, fromDarkDimension, fromEpisodic, prerequisiteIds, type ShardIndex, type UnlockSource,
@@ -12,6 +13,7 @@ import {
 
 const CATALOG_KEY = 'msf.unlocks.v1';
 const GOALS_KEY = 'msf.goals';
+const HIDE_DONE_KEY = 'msf.goals.hideDone';
 
 /** Episodic types whose nodes can hand out character shards. */
 export const EPISODIC_TYPES: Record<string, string> = {
@@ -51,6 +53,8 @@ interface State {
   catalog: Catalog | null;
   progress: string | null;
   goals: string[];
+  /** Hide goals whose character is already unlocked, here and in the Plan. */
+  hideDone: boolean;
 }
 
 let state: State = {
@@ -58,6 +62,7 @@ let state: State = {
   progress: null,
   // Catch-up targets until goals are saved on the Goals tab.
   goals: readJson<string[]>(localStorage, GOALS_KEY) ?? DEFAULT_GOALS,
+  hideDone: readJson<boolean>(localStorage, HIDE_DONE_KEY) ?? true,
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
@@ -78,6 +83,11 @@ export function useUnlocks(): State {
 export function setGoals(goals: string[]) {
   writeJson(localStorage, GOALS_KEY, goals);
   set({ goals });
+}
+
+export function setHideDone(hideDone: boolean) {
+  writeJson(localStorage, HIDE_DONE_KEY, hideDone);
+  set({ hideDone });
 }
 
 function shardIndex(characters: CharacterInfo[]): ShardIndex {
