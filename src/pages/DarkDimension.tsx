@@ -8,8 +8,13 @@ import { saveJson } from '../util/download';
 import { DD_GUIDES, guideKey, nodeTeam, type DdGuide } from '../data/ddTeams';
 import { findCharacter } from '../planner/priority';
 import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
-import { candidateTeams, TeamAdvice, TeamPicks } from './DdTeams';
-import { bestTeams } from '../planner/ddPicker';
+import { candidateTeams, EnemySummary, TeamAdvice, TeamPicks } from './DdTeams';
+import { bestTeams, boostLevel, enemyProfile, hardest, type PickContext } from '../planner/ddPicker';
+import type { KitTagHit } from '../planner/kitTags';
+import { useKitsLoading, useKitTags, useLoadKits } from '../data/kits';
+
+/** Ability text is read for this many of the strongest characters who can enter each boosted mission. */
+const KIT_POOL = 40;
 
 /** Rooms in map order: ray by ray, shallow to deep. */
 function roomOrder(dd: DD): string[] {
@@ -99,6 +104,19 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   const [busy, setBusy] = useState<string | null>(null);
   /** Rooms read so far in this Dark Dimension, for planning every mission at once. */
   const [rooms, setRooms] = useState<Record<string, NodeInfo>>({});
+  const kits = useKitTags();
+  const kitsLoading = useKitsLoading();
+
+  // Boosted missions are judged by kit mechanics, so read the ability text of whoever could enter them.
+  const kitIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of [room, ...Object.values(rooms)]) {
+      if (!r || !boostLevel(enemyProfile(r))) continue;
+      checkRequirements(roster, requirementsOf(r) ?? {}).eligible.slice(0, KIT_POOL).forEach((c) => ids.add(c.info.id));
+    }
+    return [...ids].sort();
+  }, [room, rooms, roster]);
+  useLoadKits(kitIds, live);
 
   useEffect(() => {
     if (!live) return;
@@ -160,6 +178,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   const guide = dd ? DD_GUIDES[guideKey(dd.id, plainName(dd.name ?? '')) ?? ''] : undefined;
   const req = requirementsOf(room ?? dd?.rooms?.[roomId]);
   const check = req ? checkRequirements(roster, req) : null;
+  const enemy = enemyProfile(room ?? undefined);
 
   return (
     <section className="dd">
@@ -181,7 +200,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
         <>
         {guide && (
           <GuideOverview
-            guide={guide} roster={roster} squads={snapshot.squads} rooms={rooms}
+            guide={guide} roster={roster} squads={snapshot.squads} rooms={rooms} kits={kits} kitsRead={!kitsLoading}
             onReadAll={() => void readAllRooms()} busy={busy}
           />
         )}
@@ -234,8 +253,17 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
                   ) : null;
                 })()}
                 <div className="card">
-                  <p className="small"><strong>Best teams from your roster</strong> <span className="muted">· who can enter, kept together where they’re a team</span></p>
-                  <TeamPicks picks={bestTeams(roster, req, candidateTeams(roster, snapshot.squads, nodeTeam(guide, plainName(room.name ?? ''))))} />
+                  <p className="small">
+                    <strong>Best teams from your roster</strong>{' '}
+                    <span className="muted">
+                      · {boostLevel(enemy) ? 'weighted by kit mechanics that beat this node’s boosts, then power' : 'who can enter, kept together where they’re a team'}
+                    </span>
+                  </p>
+                  {enemy && <EnemySummary enemy={enemy} />}
+                  <TeamPicks
+                    picks={bestTeams(roster, req, candidateTeams(roster, snapshot.squads, nodeTeam(guide, plainName(room.name ?? ''))), 3, { enemy, kits })}
+                    enemy={enemy} kitsRead={!kitsLoading}
+                  />
                 </div>
                 <Waves title="Enemies" waves={room.combat?.right?.waves} />
                 <Waves title="Your side (preset units)" waves={room.combat?.left?.waves} />
@@ -252,14 +280,24 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
 }
 
 /** Every mission range's team from the guide, so the whole Dark Dimension can be planned without opening rooms. */
-function GuideOverview({ guide, roster, squads, rooms, onReadAll, busy }: {
-  guide: DdGuide; roster: OwnedCharacter[]; squads: Snapshot['squads']; rooms: Record<string, NodeInfo>; onReadAll: () => void; busy: string | null;
+function GuideOverview({ guide, roster, squads, rooms, kits, kitsRead, onReadAll, busy }: {
+  guide: DdGuide; roster: OwnedCharacter[]; squads: Snapshot['squads']; rooms: Record<string, NodeInfo>;
+  kits: Record<string, KitTagHit[]>; kitsRead: boolean; onReadAll: () => void; busy: string | null;
 }) {
-  // Requirements per mission number, from the rooms read so far.
+  // Requirements and rooms per mission number, from the rooms read so far.
   const reqOf = new Map<number, Requirements | undefined>();
+  const roomOf = new Map<number, NodeInfo>();
   Object.values(rooms).forEach((r) => {
     const n = Number(/(\d+)/.exec(plainName(r.name ?? ''))?.[1]);
-    if (n) reqOf.set(n, requirementsOf(r));
+    if (n) {
+      reqOf.set(n, requirementsOf(r));
+      roomOf.set(n, r);
+    }
+  });
+  // A range is planned against its hardest mission.
+  const rangeContext = (t: DdGuide['nodes'][number]): PickContext => ({
+    kits,
+    enemy: hardest([...roomOf].filter(([n]) => n >= t.from && n <= t.to).map(([, r]) => enemyProfile(r))),
   });
   const known = (t: DdGuide['nodes'][number]) => [...reqOf.keys()].find((n) => n >= t.from && n <= t.to);
   const owned = (names: string[]) => names.filter((n) => {
@@ -283,10 +321,12 @@ function GuideOverview({ guide, roster, squads, rooms, onReadAll, busy }: {
           {(() => {
             const n = known(t);
             if (n === undefined) return null;
+            const ctx = rangeContext(t);
             return (
               <>
-                <p className="small"><strong>From your roster</strong></p>
-                <TeamPicks picks={bestTeams(roster, reqOf.get(n), candidateTeams(roster, squads, t), 2)} />
+                <p className="small"><strong>From your roster</strong>{ctx.enemy && t.from !== t.to ? <span className="muted"> · judged against the hardest of these missions</span> : null}</p>
+                {ctx.enemy && <EnemySummary enemy={ctx.enemy} />}
+                <TeamPicks picks={bestTeams(roster, reqOf.get(n), candidateTeams(roster, squads, t), 2, ctx)} enemy={ctx.enemy} kitsRead={kitsRead} />
                 <p className="small"><strong>Guide pick</strong></p>
               </>
             );

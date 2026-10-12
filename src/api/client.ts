@@ -303,6 +303,14 @@ export const msfApi = {
     );
     return { gearTiers: data.gearTiers ?? {}, abilityKit: data.abilityKit };
   },
+  /** Ability text per level for one character, without gear. */
+  async abilityKit(characterId: string): Promise<AbilityKit | undefined> {
+    const { data } = await get<{ abilityKit?: AbilityKit }>(
+      `/game/v1/characters/${encodeURIComponent(characterId)}`,
+      { itemFormat: 'id', costumes: 'none', abilityKits: 'full', gearTiers: 'none', pieceInfo: 'none' },
+    );
+    return data.abilityKit;
+  },
   async darkDimensions(): Promise<DarkDimension[]> {
     return (await getPaged<DarkDimension>('/game/v1/dds', { nodeInfo: 'none' })).data;
   },

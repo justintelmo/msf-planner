@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import type { NodeTeam } from '../data/ddTeams';
 import { CONTENT_TEAMS } from '../data/contentTeams';
-import type { CandidateTeam, TeamPick } from '../planner/ddPicker';
+import { boostLevel, type CandidateTeam, type EnemyProfile, type TeamPick } from '../planner/ddPicker';
+import { KIT_LABELS, type KitTag } from '../planner/kitTags';
 import { compact } from '../planner/items';
 import { findCharacter, MODE_LABELS, resolveTeam } from '../planner/priority';
 import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
@@ -36,27 +37,62 @@ export function TeamAdvice({ team, roster, eligible }: { team: NodeTeam; roster:
   );
 }
 
-/** Roster-built teams for a node, strongest first. */
-export function TeamPicks({ picks }: { picks: TeamPick[] }) {
+/** One line on what a node's enemies look like after its boosts. */
+export function EnemySummary({ enemy }: { enemy: EnemyProfile }) {
+  const boosted = enemy.healthBoost > 0 || enemy.damageBoost > 0;
+  return (
+    <p className="small">
+      <strong>Enemies:</strong> {enemy.count}, {compact(enemy.medianHealth)} health and {compact(enemy.medianDamage)} damage each (median)
+      {boosted && <span className="warn"> · node boosts +{Math.round(enemy.healthBoost)}% health, +{Math.round(enemy.damageBoost)}% damage</span>}
+      {enemy.energyCheats > 0 && <span className="warn"> · {enemy.energyCheats} with cheap specials or ultimates</span>}
+      <span className="muted"> · {compact(enemy.totalHealth)} health in all · resist {compact(enemy.medianResist)}</span>
+    </p>
+  );
+}
+
+const TAG_TITLE: Record<KitTag, string> = {
+  maxHealth: 'Damage scaled off the target’s Max Health keeps pace with health boosts',
+  lockdown: 'Stun, Ability Block or Disrupted stops energy-cheating enemies acting',
+  tempo: 'Takes Speed Bar or Ability Energy, or applies Slow',
+  drain: 'Drain or Health Steal keeps the team up while trading',
+  sustain: 'Barrier, Heal, Revive, Taunt, Deflect or Protect',
+  piercing: 'Ignores armor',
+};
+
+/** Roster-built teams for a node, best first, with each member's useful mechanics and how sturdy they are. */
+export function TeamPicks({ picks, enemy, kitsRead = true }: { picks: TeamPick[]; enemy?: EnemyProfile; kitsRead?: boolean }) {
   if (!picks.length) return <p className="small warn">Your roster can’t field a full team for this yet.</p>;
+  const boosted = boostLevel(enemy) > 0;
   return (
     <ol className="team-options">
       {picks.map((p, i) => (
         <li key={i}>
           <p className="small">
             <strong>{i === 0 ? 'Best: ' : ''}{p.label}</strong>{' '}
-            <span className="muted">· {compact(p.power)} power{p.core > 1 && p.core < p.members.length ? ` · ${p.core} together + ${p.members.length - p.core} fill-in` : ''}</span>
+            <span className="muted">
+              · {compact(p.power)} power{p.core > 1 && p.core < p.members.length ? ` · ${p.core} together + ${p.members.length - p.core} fill-in` : ''}
+            </span>
+            {p.sturdy !== undefined && p.sturdy < p.members.length && (
+              <span className="warn"> · {p.members.length - p.sturdy} of {p.members.length} fall to two hits, before armor</span>
+            )}
           </p>
           <ul className="team-picks">
-            {p.members.map((m) => (
-              <li key={m.info.id} className="team-pick">
-                <CharName id={m.info.id} portrait />
-                <span className="muted small">{compact(m.instance?.power ?? 0)}</span>
+            {p.fits.map((f) => (
+              <li key={f.c.info.id} className="team-pick">
+                <CharName id={f.c.info.id} portrait />
+                <span className="muted small">{compact(f.c.instance?.power ?? 0)}</span>
+                {boosted && [...f.tags.entries()].map(([t, text]) => (
+                  <span key={t} className={`pill kit${t === 'lockdown' && f.lands === false ? ' miss' : ''}`} title={`${TAG_TITLE[t]}. “${text}”`}>
+                    {KIT_LABELS[t]}{t === 'lockdown' && f.lands === false ? ' (resisted)' : ''}
+                  </span>
+                ))}
+                {f.hits !== undefined && f.hits < 2 && <span className="muted small">{f.hits < 1 ? 'one-hit' : '~1 hit'}</span>}
               </li>
             ))}
           </ul>
         </li>
       ))}
+      {boosted && !kitsRead && <li className="muted small">Still reading ability text, so mechanics aren’t counted for every character yet.</li>}
     </ol>
   );
 }

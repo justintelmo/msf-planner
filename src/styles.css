@@ -262,6 +262,10 @@ details > summary { cursor: pointer; }
 .team-picks { list-style: none; padding: 0; margin: 6px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 6px 12px; }
 .team-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
 .team-pick.unowned { opacity: .6; }
+.team-pick { flex-wrap: wrap; justify-content: flex-start; }
+.team-pick > .char-name, .team-pick > strong { margin-right: auto; }
+.pill.kit { color: var(--accent); text-transform: none; letter-spacing: 0; }
+.pill.kit.miss { color: var(--muted); }
 .dd-guide > summary { cursor: pointer; }
 .dd-guide .guide-range { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
 .dd-guide .guide-range h3 { margin: 0; font-size: 14px; }

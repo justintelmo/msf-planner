@@ -26,6 +26,23 @@ export interface CharacterInfo {
   starItems?: Item[];
 }
 
+/** Combat stats. On a node's enemies they include the node's boosts. */
+export interface Stats {
+  health?: number;
+  damage?: number;
+  armor?: number;
+  focus?: number;
+  resist?: number;
+  critChance?: number;
+  critDamageBonus?: number;
+  speed?: number;
+  blockChance?: number;
+  blockAmount?: number;
+  dodgeChance?: number;
+  accuracy?: number;
+  damageReduction?: number;
+}
+
 /** A character in a roster. Locked characters omit most fields. */
 export interface CharacterInstance {
   id: string;
@@ -51,6 +68,8 @@ export interface CharacterInstance {
     skirmisher?: number;
     raider?: number;
   };
+  /** After gear, stars, ISO-8 and node effects, before passives (roster and node units). */
+  stats?: Stats | string;
 }
 
 export interface ItemQuantity {
