@@ -229,3 +229,5 @@ details > summary { cursor: pointer; }
 .picker-list li.active { background: var(--bg); }
 .picker-list li[role="option"] .small { text-align: right; }
 .picker-hint { padding: 4px 10px; }
+.goal-shards { flex-basis: 100%; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.goal-shards meter { width: 90px; height: 8px; }

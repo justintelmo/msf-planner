@@ -6,6 +6,8 @@ import { describeGap } from '../planner/gaps';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
 import GoalPicker from './GoalPicker';
+import { SAMPLE_UPGRADES } from '../data/sample';
+import { shardProgress } from '../planner/shards';
 import ModeTargets from './ModeTargets';
 import { chaptersOf, requirementText, tierMet, tierName } from './SourceLadder';
 
@@ -110,6 +112,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
         const c = byId.get(r.characterId);
         if (hideDone && c && isUnlocked(c)) return null;
         const n = reports.slice(0, i + 1).filter((x) => { const d = byId.get(x.characterId); return !(hideDone && d && isUnlocked(d)); }).length;
+        const sp = c && shardProgress(c, snapshot.inventory, (snapshot.upgrades ?? SAMPLE_UPGRADES).yellowStarTotalShards);
         const checks = r.sources.flatMap((x) => x.checks);
         const met = checks.filter((ch) => ch.plan.met).length;
         const open = r.sources.filter((x) => x.checks.some((ch) => !ch.plan.met));
@@ -128,6 +131,12 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
                 </span>
               ) : (
                 <span className="muted small">{catalog ? 'no content rewards them now' : 'load unlock content'}</span>
+              )}
+              {sp && (
+                <span className="goal-shards small">
+                  <meter min={0} max={sp.need} value={Math.min(sp.have, sp.need)} aria-label="Shards" />
+                  {sp.have.toLocaleString()} / {sp.need.toLocaleString()} shards {sp.unlock ? `to unlock at ${sp.stars}★` : `to ${sp.stars}★`}
+                </span>
               )}
             </summary>
             <div className="toolbar goal-actions">

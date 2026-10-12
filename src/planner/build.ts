@@ -181,7 +181,7 @@ function abilitySteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step
   return steps;
 }
 
-function shardItem(c: OwnedCharacter): string {
+export function shardItem(c: OwnedCharacter): string {
   return idOf(c.info.starItems?.[0]) ?? `SHARD_${c.info.id.toUpperCase()}`;
 }
 
