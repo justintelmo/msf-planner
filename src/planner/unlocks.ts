@@ -1,4 +1,4 @@
-import type { DarkDimension, EpisodicInfo, NodeInfo, Requirements } from '../api/types';
+import type { DarkDimension, EpisodicInfo, EventInfo, NodeInfo, Requirements } from '../api/types';
 import { plainName } from './export';
 
 /** One place with entry requirements, e.g. a Dark Dimension room or a legendary event tier. */
@@ -86,6 +86,27 @@ export function fromEpisodic(kind: string, ep: EpisodicInfo, shards: ShardIndex)
   }
   const all = rewardCharacters(ep, shards);
   return { kind, id: ep.id, name: plainName(ep.name ?? ep.id), subName: plainName(ep.subName), nodes, rewards: all };
+}
+
+const EVENT_KINDS: Record<string, string> = {
+  milestone: 'Milestone', blitz: 'Blitz', tower: 'Tower', pickYourPoison: 'Pick Your Poison', battlePass: 'Battle Pass', strikePass: 'Strike Pass',
+};
+
+/**
+ * A running event whose reward tiers (milestone, blitz, tower brackets…) hand out character shards.
+ * Episodic events are left to the catalog, which reads their nodes.
+ */
+export function fromLiveEvent(e: EventInfo, shards: ShardIndex): UnlockSource | undefined {
+  const parts = Object.keys(EVENT_KINDS).filter((k) => e[k as keyof EventInfo]);
+  if (!parts.length) return undefined;
+  const rewards = rewardCharacters(parts.map((k) => e[k as keyof EventInfo]), shards);
+  if (!rewards.length) return undefined;
+  const req = e.blitz?.requirements ?? e.tower?.requirements;
+  return {
+    kind: `${EVENT_KINDS[parts[0]]} event`, id: `event:${e.id}`, name: plainName(e.name ?? e.id), subName: plainName(e.subName),
+    nodes: hasCharacterRequirement(req) ? [{ label: 'Entry', requirements: req, rewards }] : [],
+    rewards,
+  };
 }
 
 /** Requirement sets that differ, so repeated tiers with the same rules are checked once. */

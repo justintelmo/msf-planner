@@ -17,7 +17,7 @@ import StoresPanel from './StoresPanel';
 import SourceLadder from './SourceLadder';
 import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
-import { activeGoals, catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
+import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
@@ -159,7 +159,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const tabMark = useRef<HTMLDivElement>(null);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
-  const { catalog, goals: allGoals, hideDone } = useUnlocks();
+  const { catalog: saved, goals: allGoals, hideDone } = useUnlocks();
+  const catalog = useMemo(() => withLiveEvents(saved, snapshot.events, snapshot.characters), [saved, snapshot.events, snapshot.characters]);
   const goals = useMemo(() => activeGoals(allGoals, owned, hideDone), [allGoals, owned, hideDone]);
   const modeGoals = useModeGoals();
   const reports = useMemo(

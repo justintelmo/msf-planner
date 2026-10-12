@@ -114,8 +114,13 @@ export interface EventInfo {
   startTime: number;
   endTime: number;
   milestone?: { type?: 'solo' | 'alliance'; brackets?: { objective?: { progress?: Progress } }[] };
-  blitz?: { requirements?: Requirements };
-  tower?: { requirements?: Requirements };
+  blitz?: { requirements?: Requirements; brackets?: unknown[] };
+  tower?: { requirements?: Requirements; brackets?: unknown[] };
+  /** Points to the episodic (event campaign, flash or unlock event) this event runs. */
+  episodic?: { type?: string; id?: string; ids?: string[] };
+  pickYourPoison?: { brackets?: unknown[] };
+  battlePass?: { brackets?: unknown[] };
+  strikePass?: { brackets?: unknown[] };
 }
 
 export function idOf(value: Trait | Item | undefined): string | undefined {

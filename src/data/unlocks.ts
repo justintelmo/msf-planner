@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { msfApi } from '../api/client';
-import { idOf, type CharacterFilter, type CharacterInfo, type RaidDifficulty, type Requirements } from '../api/types';
+import { idOf, type CharacterFilter, type CharacterInfo, type EventInfo, type RaidDifficulty, type Requirements } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
 import { plainName } from '../planner/export';
 import { mergeTargets, planRequirement, type RequirementPlan, type Target } from '../planner/gaps';
@@ -8,7 +8,7 @@ import type { OwnedCharacter } from '../planner/requirements';
 export { activeGoals } from '../planner/requirements';
 import { wantRaidDetail } from './modeGoals';
 import {
-  distinctRequirements, fromDarkDimension, fromEpisodic, prerequisiteIds, type ShardIndex, type UnlockSource,
+  distinctRequirements, fromDarkDimension, fromEpisodic, fromLiveEvent, prerequisiteIds, type ShardIndex, type UnlockSource,
 } from '../planner/unlocks';
 
 const CATALOG_KEY = 'msf.unlocks.v1';
@@ -97,6 +97,36 @@ function shardIndex(characters: CharacterInfo[]): ShardIndex {
     m.set(`SHARD_${c.id.toUpperCase()}`, c.id);
   }
   return m;
+}
+
+/**
+ * The saved catalog plus running events whose reward tiers give shards (milestones, blitz, towers…).
+ * Those come with every Sync, so they're current even when the catalog is days old.
+ */
+export function withLiveEvents(catalog: Catalog | null, events: EventInfo[], characters: CharacterInfo[]): Catalog | null {
+  if (!catalog) return null;
+  const now = Date.now() / 1000;
+  const shards = shardIndex(characters);
+  const known = new Set(catalog.sources.map((s) => s.id));
+  const live = events
+    .filter((e) => e.endTime > now)
+    .map((e) => fromLiveEvent(e, shards))
+    .filter((s): s is UnlockSource => !!s && !known.has(s.id));
+  return live.length ? { ...catalog, sources: [...catalog.sources, ...live] } : catalog;
+}
+
+/** Running episodic events the saved catalog hasn't read yet; refreshing unlock content picks them up. */
+export function unreadEvents(catalog: Catalog | null, events: EventInfo[]): string[] {
+  if (!catalog) return [];
+  const now = Date.now() / 1000;
+  const known = new Set(catalog.sources.map((s) => s.id));
+  return events
+    .filter((e) => e.endTime > now && e.episodic)
+    .filter((e) => {
+      const ids = [e.episodic?.id, ...(e.episodic?.ids ?? [])].filter(Boolean) as string[];
+      return ids.length > 0 && !ids.some((id) => known.has(id));
+    })
+    .map((e) => plainName(e.name ?? e.id));
 }
 
 /** Reads every Dark Dimension and episodic from the API and keeps what unlocks need. */
