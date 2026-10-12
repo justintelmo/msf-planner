@@ -7,7 +7,7 @@ import { SAMPLE_UPGRADES } from '../data/sample';
 import type { Snapshot } from '../data/store';
 import { buildPlan, modeEffectLabel, sumCost, type Step } from '../planner/build';
 import { plainName } from '../planner/export';
-import { compact, formatCost, itemLabel } from '../planner/items';
+import { compact, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { isMetRaid, modeReports, useModeGoals } from '../data/modeGoals';
 import { GOLD_ID, useWallet } from '../data/wallet';
@@ -15,6 +15,7 @@ import Currencies, { withTypedAmounts } from './Currencies';
 import SyncReview from './SyncReview';
 import StoresPanel from './StoresPanel';
 import SourceLadder from './SourceLadder';
+import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
 import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
@@ -276,7 +277,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             return (
               <article className="card plan-goal" key={r.characterId}>
                 <h3>
-                  {r.label ?? nameOf(r.characterId)}{' '}
+                  {r.label ?? <CharName id={r.characterId} portrait />}{' '}
                   <span className="muted small">
                     {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
                   </span>
@@ -288,7 +289,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     const count = (st: Step['status']) => own.filter((x) => x.status === st).length;
                     return (
                       <li key={id} className="small">
-                        <strong>{nameOf(id)}</strong>: {g.join(', ')}
+                        <CharName id={id} portrait />: {g.join(', ')}
                         {count('ready') > 0 && <span className="pill ready"> {count('ready')} do now</span>}
                         {count('short') > 0 && <span className="pill short"> {count('short')} short</span>}
                         {count('unchecked') > 0 && <span className="pill unchecked"> {count('unchecked')} check in game</span>}
@@ -475,15 +476,21 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             <ol className="steps">
               {list.map((s, i) => (
                 <li key={i}>
-                  <strong>{nameOf(s.characterId)}</strong>: {s.title}
+                  <CharName id={s.characterId} />: {s.title}
                   {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
                   {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
-                  <span className="muted small">
-                    {' · '}{formatCost((s.uses ?? s.cost).filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC'), label) || 'no materials'}
-                    {s.crafted && ` · crafts ${s.crafted.length} ${s.kind === 'iso' ? 'crystal' : 'piece'}${s.crafted.length > 1 ? 's' : ''}`}
-                    {s.gold > 0 && ` · ${compact(s.gold)} gold`}
-                  </span>
+                  <div className="step-cost">
+                    {(() => {
+                      const mats = (s.uses ?? s.cost).filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC');
+                      return mats.length ? <CostChips cost={mats} label={label} /> : <span className="muted small">no materials</span>;
+                    })()}
+                    <span className="muted small">
+                      {s.crafted && `crafts ${s.crafted.length} ${s.kind === 'iso' ? 'crystal' : 'piece'}${s.crafted.length > 1 ? 's' : ''}`}
+                      {s.crafted && s.gold > 0 && ' · '}
+                      {s.gold > 0 && `${compact(s.gold)} gold`}
+                    </span>
+                  </div>
                   {s.detail && <div className="muted small">{s.detail}</div>}
                 </li>
               ))}
@@ -506,14 +513,14 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
           </p>
           <ul className="shortages">
             {farm.slice(0, 18).map((m) => (
-              <li key={m.item}><strong>{compact(m.quantity)}</strong> {label(m.item)}</li>
+              <li key={m.item}><ItemChip id={m.item} quantity={m.quantity} label={label(m.item)} /></li>
             ))}
           </ul>
           <ol className="steps">
             {schedule.blocked.slice(0, 10).map((s, i) => (
               <li key={i} className="small">
-                <strong>{nameOf(s.characterId)}</strong>: {s.title}{s.goal && <span className="pill goal"> {s.goal}</span>}
-                <span className="muted"> · needs {formatCost(s.missing, label)}</span>
+                <CharName id={s.characterId} />: {s.title}{s.goal && <span className="pill goal"> {s.goal}</span>}
+                <div className="step-cost"><span className="muted">needs</span> <CostChips cost={s.missing} label={label} /></div>
                 {storeDays(s.missing) && <span className="small"> · {storeDays(s.missing)}</span>}
               </li>
             ))}
@@ -530,6 +537,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
           return (
             <details className="card plan-char" key={character.info.id}>
               <summary>
+                <CharPortrait id={character.info.id} />
                 <strong>{nameOf(character.info.id)}</strong>{' '}
                 <span className="muted small">
                   {isUnlocked(character)
@@ -553,10 +561,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     <span className={`pill ${s.status}`}>{STATUS_LABEL[s.status]}</span> {s.title}
                     {s.goal && <span className="pill goal"> {s.goal}</span>}
                     {s.status === 'short' && s.missing.length > 0 && (
-                      <span className="small"> · need {formatCost(s.missing, label)}</span>
+                      <div className="step-cost"><span className="small">need</span> <CostChips cost={s.missing} label={label} /></div>
                     )}
                     {s.status !== 'short' && s.cost.length > 0 && (
-                      <span className="muted small"> · {formatCost(s.cost, label)}</span>
+                      <div className="step-cost"><CostChips cost={s.cost} label={label} /></div>
                     )}
                     {s.detail && <div className="muted small">{s.detail}</div>}
                     {s.modeEffects?.map((t, k) => (

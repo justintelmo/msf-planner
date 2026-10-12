@@ -1,3 +1,4 @@
+import { CharName } from './Details';
 import { useEffect, useMemo, useState } from 'react';
 import { readJson, writeJson } from '../auth/storage';
 import type { Snapshot } from '../data/store';
@@ -86,7 +87,7 @@ export default function SyncReview({ snapshot, owned, ranked, targets, targetsFo
           {list.map((c) => (
             <li key={c.characterId}>
               <span className={`pill ${VERDICT[c.verdict].cls}`}>{VERDICT[c.verdict].label}</span>{' '}
-              <strong>{nameOf(c.characterId)}</strong>: {c.changes.join(', ')}
+              <CharName id={c.characterId} portrait label={nameOf(c.characterId)} />: {c.changes.join(', ')}
               <div className="muted small">{c.why.join('. ')}.</div>
             </li>
           ))}

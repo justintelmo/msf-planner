@@ -6,6 +6,7 @@ import { describeGap } from '../planner/gaps';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
 import GoalPicker from './GoalPicker';
+import { CharName, CharPortrait } from './Details';
 import { SAMPLE_UPGRADES } from '../data/sample';
 import { shardProgress } from '../planner/shards';
 import ModeTargets from './ModeTargets';
@@ -48,7 +49,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
                             const gaps = describeGap(p.character, p.gap);
                             return gaps.length ? (
                               <li key={p.character.info.id} className="small">
-                                {nameOf(p.character.info.id)}: <span className="warn">{gaps.join(', ')}</span>
+                                <CharName id={p.character.info.id} portrait />: <span className="warn">{gaps.join(', ')}</span>
                               </li>
                             ) : null;
                           })}
@@ -121,6 +122,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
           <details className="card goal" key={r.characterId}>
             <summary>
               <span className="goal-title">
+                <CharPortrait id={r.characterId} />
                 <strong>{n}. {nameOf(r.characterId)}</strong>
                 {c && isUnlocked(c) && <span className="pill ready">Unlocked</span>}
               </span>

@@ -6,6 +6,7 @@ import { logout } from './auth/auth';
 import { leave, sync, useAutoSync, useStore } from './data/store';
 import Callback from './pages/Callback';
 import Login from './pages/Login';
+import { DetailProvider } from './pages/Details';
 
 // Pages load on first visit, so the app starts with only what the current tab needs.
 const DarkDimension = lazy(() => import('./pages/DarkDimension'));
@@ -86,7 +87,7 @@ export default function App() {
         {!snapshot ? (
           <p className="muted">Loading your account…</p>
         ) : (
-          <>
+          <DetailProvider snapshot={snapshot}>
           <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<p className="muted" role="status">Loading…</p>}>
           <Routes>
@@ -102,7 +103,7 @@ export default function App() {
           </ErrorBoundary>
           <KeepAlive path="/goals" pathname={pathname}><Goals snapshot={snapshot} /></KeepAlive>
           <KeepAlive path="/plan" pathname={pathname}><Plan snapshot={snapshot} /></KeepAlive>
-          </>
+          </DetailProvider>
         )}
       </main>
     </div>

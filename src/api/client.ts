@@ -94,6 +94,19 @@ async function getPaged<T>(path: string, params: Record<string, string>): Promis
   return { meta: first.meta, data: [first.data, ...rest.map((r) => r.data)].flat() };
 }
 
+export interface ItemInfo {
+  id: string;
+  name?: string;
+  icon?: string;
+  description?: string;
+}
+
+function toItemInfo(item: Item | undefined, base: string | undefined): ItemInfo | undefined {
+  if (!item || typeof item === 'string') return undefined;
+  const o = item as { id: string; name?: string; icon?: string; description?: string };
+  return { id: o.id, name: o.name, icon: resolveImg(o.icon, base), description: o.description };
+}
+
 export function resolveImg(path: string | undefined, base: string | undefined): string | undefined {
   if (!path || !base || /^https?:\/\//.test(path)) return path;
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
@@ -125,6 +138,38 @@ export const msfApi = {
       if (!prev || (entry.quantity ?? 0) > (prev.quantity ?? 0)) merged.set(id, entry);
     }
     return [...merged.values()];
+  },
+  /** Name, icon and description of every item in the inventory, read once to label items. */
+  async inventoryItems(): Promise<ItemInfo[]> {
+    const read = (itemType: string) =>
+      get<ItemQuantity[]>('/player/v1/inventory', { itemType, pieceInfo: 'none', statsFormat: 'csv' })
+        .then((r) => (r.data ?? []).map((e) => toItemInfo(e.item, r.meta?.baseImgUrl)))
+        .catch(() => [] as (ItemInfo | undefined)[]);
+    const lists = await Promise.all(INVENTORY_TYPES.map(read));
+    return lists.flat().filter((i): i is ItemInfo => !!i);
+  },
+  /** One item's name, icon and description. */
+  async itemInfo(itemId: string): Promise<ItemInfo | undefined> {
+    const { data, meta } = await get<Item>(`/game/v1/items/${encodeURIComponent(itemId)}`, {
+      pieceInfo: 'none', pieceDirectCost: 'none', pieceFlatCost: 'none', subPieceInfo: 'none', statsFormat: 'csv',
+    });
+    return toItemInfo(data, meta?.baseImgUrl);
+  },
+  /** Characters whose gear uses this item. */
+  async itemCharacters(itemId: string): Promise<string[]> {
+    const { data } = await get<unknown>(`/game/v1/items/${encodeURIComponent(itemId)}/characters`, { charInfo: 'none', itemFormat: 'id' });
+    const ids = new Set<string>();
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') {
+        const o = v as Record<string, unknown>;
+        if (typeof o.character === 'string') ids.add(o.character);
+        else if (o.character && typeof o.character === 'object' && typeof (o.character as { id?: unknown }).id === 'string') ids.add((o.character as { id: string }).id);
+        Object.values(o).forEach(walk);
+      }
+    };
+    walk(data);
+    return [...ids];
   },
   async events(): Promise<EventInfo[]> {
     return (await get<EventInfo[]>('/player/v1/events', { itemFormat: 'id', pieceInfo: 'none' })).data;

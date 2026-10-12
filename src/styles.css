@@ -231,3 +231,27 @@ details > summary { cursor: pointer; }
 .picker-hint { padding: 4px 10px; }
 .goal-shards { flex-basis: 100%; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
 .goal-shards meter { width: 90px; height: 8px; }
+/* Character and item popups, and the names/chips that open them. */
+.char-name { display: inline-flex; align-items: center; gap: 6px; padding: 0; min-height: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; vertical-align: middle; }
+.char-name img, .char-name .ph { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--bg); flex: none; }
+.char-name:hover strong, .char-name:focus-visible strong { text-decoration: underline; }
+.item-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px 1px 2px; min-height: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: inherit; font: inherit; font-size: 13px; cursor: pointer; vertical-align: middle; }
+.item-chip img { width: 20px; height: 20px; object-fit: contain; }
+.item-chip .item-name { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.detail-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.detail-head h2 { margin: 0 0 4px; font-size: 18px; }
+.portrait-lg { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; background: var(--surface); flex: none; }
+.icon-lg { width: 64px; height: 64px; object-fit: contain; background: var(--surface); border-radius: 10px; flex: none; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin: 0 0 12px; }
+.stats div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.stats dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.stats dd { margin: 2px 0 0; font-weight: 600; }
+.detail h3 { margin: 12px 0 4px; }
+.detail .sheet-head { padding-bottom: 0; }
+.cost-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; vertical-align: middle; }
+.step-cost { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 3px; }
+.picker-who { display: inline-flex; align-items: center; gap: 8px; }
+.picker-who img, .picker-who .ph { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--bg); flex: none; }
+.shortages { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
+.item-chip.shard img { border-radius: 50%; object-fit: cover; }

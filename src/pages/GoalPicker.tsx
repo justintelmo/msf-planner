@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import type { Catalog } from '../data/unlocks';
+import { useDetails } from './Details';
 import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
 
 const LIMIT = 8;
@@ -24,6 +25,7 @@ export default function GoalPicker({ roster, goals, catalog, nameOf, onPick }: {
   onPick: (id: string) => void;
 }) {
   const listId = useId();
+  const d = useDetails();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -101,7 +103,10 @@ export default function GoalPicker({ roster, goals, catalog, nameOf, onPick }: {
               }}
               onMouseEnter={() => setActive(i)}
             >
-              <span>{o.name}</span>
+              <span className="picker-who">
+                {d?.portraitOf(o.id) ? <img src={d.portraitOf(o.id)} alt="" loading="lazy" /> : <span className="ph" />}
+                {o.name}
+              </span>
               <span className="muted small">
                 {o.locked ? 'locked' : 'owned'}{o.from ? ` · ${o.from}` : ''}
               </span>
