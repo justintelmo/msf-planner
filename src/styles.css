@@ -190,3 +190,34 @@ details > summary { cursor: pointer; }
 .stores[open] > summary { margin-bottom: 8px; }
 .store-row { align-items: end; padding: 8px 0; border-bottom: 1px solid var(--border, rgba(127,127,127,.2)); }
 .amount select { width: 100%; box-sizing: border-box; }
+/* Plan: account sheet, sticky section tabs, collapsible character cards. */
+.plan-bar { margin-bottom: 12px; }
+.account-btn { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; text-align: left; background: var(--surface); }
+.sheet { width: min(640px, 100%); max-width: 100%; max-height: 92vh; margin: auto auto 0; padding: 0 16px 16px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--bg); color: var(--text); overflow-y: auto; }
+@media (min-width: 721px) { .sheet { margin: auto; border-radius: 12px; } }
+.sheet::backdrop { background: rgba(0, 0, 0, .45); }
+.sheet-head { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; background: var(--bg); padding: 12px 0 8px; }
+.sheet-head h2 { margin: 0; font-size: 17px; }
+.sheet > details { margin-bottom: 12px; }
+.subtabs { position: sticky; top: var(--topbar-h, 0); z-index: 5; display: flex; gap: 4px; margin: 0 -16px 12px; padding: 6px 16px; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.subtabs button { flex: 1 0 auto; border: 0; background: transparent; color: var(--muted); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.subtabs button.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.subtabs .count { font-size: 11px; color: var(--muted); font-weight: 400; }
+.plan-char > summary { cursor: pointer; }
+.plan-char > summary .pill { margin-left: 2px; }
+.plan-char[open] > summary { margin-bottom: 8px; }
+/* Saga ladders: one line per chapter. */
+.ladder { list-style: none; padding: 0; margin: 6px 0 10px; display: grid; gap: 6px; }
+.ladder .rung.met { color: var(--ok); }
+.ladder .rung.open { color: var(--warn); }
+/* Goals: one summary row per goal. */
+.goals .goal { margin-bottom: 8px; }
+.goals .goal > summary { cursor: pointer; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; }
+.goal-title { display: inline-flex; align-items: center; gap: 8px; }
+.goal-progress { display: inline-flex; align-items: center; gap: 8px; }
+.goal-progress meter { width: 90px; height: 8px; }
+.goal-actions { margin: 8px 0 0; }
+.chapter { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 4px; }
+.chapter > summary { cursor: pointer; }
+.chapter .rung.met { color: var(--ok); }
+.chapter .rung.open { color: var(--warn); }

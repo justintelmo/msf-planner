@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import type { Snapshot } from '../data/store';
-import { goalReports, loadCatalog, setGoals, useUnlocks } from '../data/unlocks';
+import { goalReports, loadCatalog, setGoals, useUnlocks, type GoalSourceReport } from '../data/unlocks';
 import { plainName } from '../planner/export';
 import { describeGap } from '../planner/gaps';
 import { isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
 import ModeTargets from './ModeTargets';
+import { chaptersOf, requirementText, tierMet, tierName } from './SourceLadder';
 
 export default function Goals({ snapshot }: { snapshot: Snapshot }) {
   const live = snapshot.source === 'live';
@@ -32,6 +33,39 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
     [next[i], next[i + d]] = [next[i + d], next[i]];
     setGoals(next);
   };
+
+  const sourceBlock = ({ source, checks, unlocks }: GoalSourceReport) => (
+                  <div key={source.kind + source.id} className="source">
+                    <p><strong>{source.name}</strong> <span className="muted small">{source.kind}{source.subName ? ` · ${source.subName}` : ''}</span>
+                      {unlocks && <span className="pill short"> Clear first: opens {unlocks}</span>}</p>
+                    {checks.filter((ch) => !ch.plan.met).map((ch, j) => (
+                      <div key={j} className="check">
+                        <p className="small">
+                          <span className="pill short">{`${ch.plan.ready} of ${ch.plan.needed} ready`}</span>{' '}
+                          {plainName(ch.requirements.description) || requirementText({ source, checks: [ch] }, nameOf)}{' '}
+                          <span className="muted">· {ch.labels.length > 3 ? `${ch.labels[0]} to ${ch.labels[ch.labels.length - 1]} (${ch.labels.length} nodes)` : ch.labels.join(', ')}</span>
+                        </p>
+                        {ch.plan.locked.length > 0 && (
+                          <p className="small warn">Needs {ch.plan.locked.map((l) => nameOf(l.info.id)).join(', ')} unlocked first.</p>
+                        )}
+                        <ul className="picks">
+                          {ch.plan.picks.map((p) => {
+                            const gaps = describeGap(p.character, p.gap);
+                            return gaps.length ? (
+                              <li key={p.character.info.id} className="small">
+                                {nameOf(p.character.info.id)}: <span className="warn">{gaps.join(', ')}</span>
+                              </li>
+                            ) : null;
+                          })}
+                          {ch.plan.picks.length < ch.plan.needed && (
+                            <li className="small warn">Only {ch.plan.picks.length} characters in your roster fit; unlock more that match.</li>
+                          )}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                
+  );
 
   return (
     <section className="goals">
@@ -83,13 +117,30 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
 
       {reports.map((r, i) => {
         const c = byId.get(r.characterId);
+        const checks = r.sources.flatMap((x) => x.checks);
+        const met = checks.filter((ch) => ch.plan.met).length;
+        const open = r.sources.filter((x) => x.checks.some((ch) => !ch.plan.met));
+        const ready = r.sources.filter((x) => !open.includes(x));
         return (
-          <article className="card goal" key={r.characterId}>
-            <header>
-              <h3>{i + 1}. {nameOf(r.characterId)} {c && isUnlocked(c) && <span className="pill ready">Unlocked</span>}</h3>
-              {i > 0 && <button className="ghost small" onClick={() => move(i, -1)}>↑</button>}
+          <details className="card goal" key={r.characterId}>
+            <summary>
+              <span className="goal-title">
+                <strong>{i + 1}. {nameOf(r.characterId)}</strong>
+                {c && isUnlocked(c) && <span className="pill ready">Unlocked</span>}
+              </span>
+              {catalog && r.sources.length > 0 ? (
+                <span className="goal-progress muted small">
+                  <meter min={0} max={checks.length} value={met} aria-label="Requirements met" />
+                  {met} of {checks.length} met
+                </span>
+              ) : (
+                <span className="muted small">{catalog ? 'no content rewards them now' : 'load unlock content'}</span>
+              )}
+            </summary>
+            <div className="toolbar goal-actions">
+              {i > 0 && <button className="ghost small" onClick={() => move(i, -1)}>Move up</button>}
               <button className="ghost small" onClick={() => setGoals(goals.filter((g) => g !== r.characterId))}>Remove</button>
-            </header>
+            </div>
             {!catalog ? (
               <p className="muted small">Load unlock content to see where {nameOf(r.characterId)} comes from.</p>
             ) : r.sources.length === 0 ? (
@@ -97,42 +148,32 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
                 No event, campaign or Dark Dimension in the API rewards {nameOf(r.characterId)} right now. They may come from orbs, stores or an upcoming event.
               </p>
             ) : (
-              r.sources.map(({ source, checks, unlocks }) => (
-                <div key={source.kind + source.id} className="source">
-                  <p><strong>{source.name}</strong> <span className="muted small">{source.kind}{source.subName ? ` · ${source.subName}` : ''}</span>
-                    {unlocks && <span className="pill short"> Clear first: opens {unlocks}</span>}</p>
-                  {checks.length === 0 && <p className="muted small">No character requirements.</p>}
-                  {checks.map((ch, j) => (
-                    <div key={j} className="check">
-                      <p className="small">
-                        <span className={`pill ${ch.plan.met ? 'ready' : 'short'}`}>{ch.plan.met ? 'Ready' : `${ch.plan.ready} of ${ch.plan.needed} ready`}</span>{' '}
-                        {plainName(ch.requirements.description) || 'Requirement'}{' '}
-                        <span className="muted">· {ch.labels.length > 3 ? `${ch.labels[0]} to ${ch.labels[ch.labels.length - 1]} (${ch.labels.length} nodes)` : ch.labels.join(', ')}</span>
-                      </p>
-                      {ch.plan.locked.length > 0 && (
-                        <p className="small warn">Needs {ch.plan.locked.map((l) => nameOf(l.info.id)).join(', ')} unlocked first.</p>
-                      )}
-                      {!ch.plan.met && (
-                        <ul className="picks">
-                          {ch.plan.picks.map((p) => {
-                            const gaps = describeGap(p.character, p.gap);
-                            return (
-                              <li key={p.character.info.id} className="small">
-                                {nameOf(p.character.info.id)}: {gaps.length ? <span className="warn">{gaps.join(', ')}</span> : <span className="ok">ready</span>}
-                              </li>
-                            );
-                          })}
-                          {ch.plan.picks.length < ch.plan.needed && (
-                            <li className="small warn">Only {ch.plan.picks.length} characters in your roster fit; unlock more that match.</li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))
+              <>
+                {ready.length > 0 && (
+                  <p className="small ok">
+                    ✓ Roster ready for {ready.map((x) => (x.source.subName ? `${x.source.name} (${x.source.subName})` : x.source.name)).join(', ')}.
+                  </p>
+                )}
+                {chaptersOf(r).length > 1 ? (
+                  chaptersOf(r).filter((ch) => ch.tiers.some((t) => open.includes(t))).map((ch) => (
+                    <details key={ch.key} className="chapter">
+                      <summary>
+                        <strong>{ch.name}</strong>{' '}
+                        <span className="small">
+                          {ch.tiers.map((t, k) => (
+                            <span key={t.source.id} className={`rung ${tierMet(t) ? 'met' : 'open'}`}>{k > 0 && ' · '}{tierName(t)} {tierMet(t) ? '✓' : ''}</span>
+                          ))}
+                        </span>
+                      </summary>
+                      {ch.tiers.filter((t) => open.includes(t)).map(sourceBlock)}
+                    </details>
+                  ))
+                ) : (
+                  open.map(sourceBlock)
+                )}
+              </>
             )}
-          </article>
+          </details>
         );
       })}
     </section>

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type GearTiers } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
@@ -14,6 +14,7 @@ import { GOLD_ID, useWallet } from '../data/wallet';
 import Currencies, { withTypedAmounts } from './Currencies';
 import SyncReview from './SyncReview';
 import StoresPanel from './StoresPanel';
+import SourceLadder from './SourceLadder';
 import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
 import { catalogFilters, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
@@ -27,6 +28,9 @@ const DAYS_KEY = 'msf.plan.days';
 const RECIPES_KEY = 'msf.recipes.v1';
 const MODES_KEY = 'msf.plan.modes';
 const DETAIL_KEY = 'msf.chardetail.v1';
+const TAB_KEY = 'msf.plan.tab';
+
+type PlanTab = 'goals' | 'priority' | 'farm' | 'characters';
 /** Characters whose gear and ability text get fetched; the rest are planned without them. */
 const DETAIL_LIMIT = 60;
 const SHOWN = 20;
@@ -151,7 +155,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => [...withTypedAmounts(snapshot.inventory, Object.fromEntries(JSON.parse(ionKey) as [string, number][])), ...storeInventory(stores)],
     [snapshot.inventory, ionKey, stores],
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const sheet = useRef<HTMLDialogElement>(null);
+  const tabMark = useRef<HTMLDivElement>(null);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
   const { catalog, goals } = useUnlocks();
@@ -225,6 +230,24 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => sumCost(...schedule.blocked.slice(0, 15).map((b) => b.missing)).filter((m) => !m.item.startsWith('SC')).sort((a, b) => b.quantity - a.quantity),
     [schedule],
   );
+  const tabs: [PlanTab, string, number?][] = [
+    ...(reports.length > 0 && catalog ? [['goals', 'Goals', reports.length] as [PlanTab, string, number]] : []),
+    ['priority', 'Priority', schedule.steps.length],
+    ...(schedule.blocked.length > 0 ? [['farm', 'Farm', schedule.blocked.length] as [PlanTab, string, number]] : []),
+    ['characters', 'Characters'],
+  ];
+  const [savedTab, setSavedTab] = useState<PlanTab>(() => readJson<PlanTab>(localStorage, TAB_KEY) ?? 'goals');
+  const tab = tabs.some(([id]) => id === savedTab) ? savedTab : tabs[0][0];
+  const pickTab = (id: PlanTab) => {
+    setSavedTab(id);
+    writeJson(localStorage, TAB_KEY, id);
+    // Keep the bar in view: jump back up only when the page is scrolled past it.
+    const mark = tabMark.current;
+    if (!mark) return;
+    const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 0;
+    const top = mark.getBoundingClientRect().top + window.scrollY - header;
+    if (window.scrollY > top) window.scrollTo({ top });
+  };
   const reasonsOf = useMemo(() => new Map(ranked.map((r) => [r.character.info.id, r])), [ranked]);
 
   const [shownChars, setShownChars] = useState(SHOWN);
@@ -248,7 +271,6 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
               [...merged].map(([id, m]) => [id, describeGap(m.character, m.target)] as const).filter(([, g]) => g.length),
             );
             const steps = plan.doNow.concat(plan.characters.flatMap((p) => p.steps.filter((x) => x.status !== 'ready')));
-            const prereqs = r.sources.filter((s) => s.unlocks).map((s) => (s.source.subName ? `${s.source.name} (${s.source.subName})` : s.source.name));
             return (
               <article className="card plan-goal" key={r.characterId}>
                 <h3>
@@ -257,7 +279,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
                   </span>
                 </h3>
-                {prereqs.length > 0 && <p className="small warn">Clear first: {prereqs.join(', ')}.</p>}
+                <SourceLadder report={r} nameOf={nameOf} />
                 <ul>
                   {[...gaps].map(([id, g]) => {
                     const own = steps.filter((x) => x.characterId === id && x.goal);
@@ -283,9 +305,23 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         snapshot={snapshot} owned={owned} ranked={ranked} targets={targets} nameOf={nameOf}
         targetsFor={(o) => goalTargets([...goalReports(goals, catalog, o), ...modeReports(modeGoals, catalog, o, snapshot.squads ?? {})], nameOf)}
       />
+      <div className="plan-bar">
+        <button className="ghost account-btn" onClick={() => sheet.current?.showModal()} aria-haspopup="dialog">
+          <span>Account and settings</span>
+          <span className="muted small">
+            {gold === undefined ? 'enter gold' : `${compact(gold)} gold`} · {days === 1 ? '1 day' : `${days} days`} ·{' '}
+            {modeOrder.slice(0, 2).map((m) => MODE_LABELS[m] ?? m).join(', ')} first
+          </span>
+        </button>
+      </div>
+      <dialog ref={sheet} className="sheet" aria-label="Account and settings" onClick={(e) => e.target === sheet.current && sheet.current?.close()}>
+        <div className="sheet-head">
+          <h2>Account and settings</h2>
+          <button className="ghost" onClick={() => sheet.current?.close()}>Done</button>
+        </div>
       <Currencies inventory={snapshot.inventory} upgrades={snapshot.upgrades ?? SAMPLE_UPGRADES} label={label} />
       <StoresPanel owned={owned} nameOf={nameOf} />
-      <details className="card settings" open={settingsOpen} onToggle={(e) => setSettingsOpen((e.target as HTMLDetailsElement).open)}>
+      <details className="card settings" open>
         <summary>
           <strong>Settings</strong>{' '}
           <span className="muted small">
@@ -319,8 +355,6 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </label>
       </div>
       </details>
-      {remaining > 0 && <p className="muted small" role="status">Reading gear and abilities for {remaining} characters…</p>}
-      {recipesLeft > 0 && <p className="muted small" role="status">Reading crafting recipes for {recipesLeft} gear pieces…</p>}
       <details className="explain small">
         <summary>How the plan is ranked</summary>
         {goals.length > 0 && (
@@ -358,19 +392,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
           ) : null;
         })()}
       </details>
+      </dialog>
+      {remaining > 0 && <p className="muted small" role="status">Reading gear and abilities for {remaining} characters…</p>}
+      {recipesLeft > 0 && <p className="muted small" role="status">Reading crafting recipes for {recipesLeft} gear pieces…</p>}
       {!snapshot.squads && (
         <p className="muted small">Your saved squads haven’t loaded yet. Press Sync to include them.</p>
       )}
       {snapshot.plannerErrors?.map((e) => (
         <p key={e} className="error small">Couldn’t load {e}</p>
       ))}
-
-      <nav className="jump" aria-label="Plan sections">
-        {reports.length > 0 && catalog && <a href="#goals">Goals</a>}
-        <a href="#priority">Priority list</a>
-        {schedule.blocked.length > 0 && <a href="#farm">Farm next</a>}
-        <a href="#characters">By character</a>
-      </nav>
 
       <div className="tiles">
         <Tile label="Steps in the list" value={String(schedule.steps.length)} />
@@ -381,7 +411,16 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         />
       </div>
 
-      {reports.length > 0 && catalog && (
+      <div ref={tabMark} />
+      <nav className="subtabs" aria-label="Plan sections">
+        {tabs.map(([id, text, count]) => (
+          <button key={id} className={id === tab ? 'active' : ''} aria-current={id === tab ? 'page' : undefined} onClick={() => pickTab(id)}>
+            {text}{count !== undefined && <span className="count">{count}</span>}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'goals' && (
         <>
           <h2 id="goals">Unlock goals and mode targets</h2>
           <p className="muted small">
@@ -417,6 +456,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </>
       )}
 
+      {tab === 'priority' && (
+        <>
       <h2 id="priority">Priority list</h2>
       <p className="muted small">
         Levels, abilities, gear, stars and ISO-8 across your roster, best value for the gold first. Unlock-goal thresholds
@@ -452,7 +493,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <p className="muted small">The list stops where your gold runs out within {days === 1 ? '1 day' : `${days} days`}.</p>
       )}
 
-      {schedule.blocked.length > 0 && (
+        </>
+      )}
+
+      {tab === 'farm' && (
         <>
           <h2 id="farm">Farm next</h2>
           <p className="muted small">
@@ -475,20 +519,26 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         </>
       )}
 
+      {tab === 'characters' && (
+        <>
       <h2 id="characters">By character, highest priority first</h2>
       <div className="squads">
         {withSteps.slice(0, shownChars).map(({ character, steps }) => {
           const rank = reasonsOf.get(character.info.id);
           return (
-            <article className="card plan-char" key={character.info.id}>
-              <h3>
-                {nameOf(character.info.id)}{' '}
+            <details className="card plan-char" key={character.info.id}>
+              <summary>
+                <strong>{nameOf(character.info.id)}</strong>{' '}
                 <span className="muted small">
                   {isUnlocked(character)
                     ? `L${character.instance?.level ?? 0} · ${character.instance?.activeYellow}★ · G${character.instance?.gearTier}`
                     : 'locked'}
                 </span>
-              </h3>
+                {(['ready', 'short', 'unchecked'] as const).map((st) => {
+                  const n = steps.filter((x) => x.status === st).length;
+                  return n ? <span key={st} className={`pill ${st}`}>{n} {STATUS_LABEL[st]}</span> : null;
+                })}
+              </summary>
               {targets[character.info.id] && <p className="small why">{targets[character.info.id].why}</p>}
               {rank && (
                 <p className="muted small why">
@@ -513,7 +563,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                   </li>
                 ))}
               </ul>
-            </article>
+            </details>
           );
         })}
       </div>
@@ -521,6 +571,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         <button className="ghost" onClick={() => setShownChars((n) => n + SHOWN)}>
           Show more ({withSteps.length - shownChars} left)
         </button>
+      )}
+        </>
       )}
     </section>
   );

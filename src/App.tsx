@@ -41,7 +41,16 @@ export default function App() {
 
   return (
     <div className="shell">
-      <header className="topbar">
+      <header
+        className="topbar"
+        ref={(el) => {
+          if (!el) return;
+          // Lets sticky bars inside pages sit just under the header.
+          const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`));
+          ro.observe(el);
+          return () => ro.disconnect();
+        }}
+      >
         <strong className="brand">MSF Planner</strong>
         <nav className="tabs" aria-label="Main">
           {TABS.map((t) => (
