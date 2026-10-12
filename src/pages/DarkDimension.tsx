@@ -8,7 +8,8 @@ import { saveJson } from '../util/download';
 import { DD_GUIDES, guideKey, nodeTeam, type DdGuide } from '../data/ddTeams';
 import { findCharacter } from '../planner/priority';
 import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
-import { TeamAdvice } from './DdTeams';
+import { candidateTeams, TeamAdvice, TeamPicks } from './DdTeams';
+import { bestTeams } from '../planner/ddPicker';
 
 /** Rooms in map order: ray by ray, shallow to deep. */
 function roomOrder(dd: DD): string[] {
@@ -96,6 +97,8 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   const [room, setRoom] = useState<NodeInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** Rooms read so far in this Dark Dimension, for planning every mission at once. */
+  const [rooms, setRooms] = useState<Record<string, NodeInfo>>({});
 
   useEffect(() => {
     if (!live) return;
@@ -110,6 +113,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   useEffect(() => {
     if (!ddId) return;
     setDd(null);
+    setRooms({});
     setRoom(null);
     setRoomId('');
     msfApi.darkDimension(ddId).then(setDd).catch((e) => setError(String(e)));
@@ -118,8 +122,24 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   useEffect(() => {
     if (!ddId || !roomId) return;
     setRoom(null);
-    msfApi.darkDimensionRoom(ddId, roomId).then(setRoom).catch((e) => setError(String(e)));
+    msfApi.darkDimensionRoom(ddId, roomId).then((r) => {
+      setRoom(r);
+      setRooms((all) => ({ ...all, [roomId]: r }));
+    }).catch((e) => setError(String(e)));
   }, [ddId, roomId]);
+
+  const readAllRooms = async () => {
+    if (!dd) return;
+    const ids = roomOrder(dd).filter((id) => !rooms[id]);
+    const found: Record<string, NodeInfo> = {};
+    for (let i = 0; i < ids.length; i++) {
+      setBusy(`Reading mission ${i + 1} of ${ids.length}…`);
+      const r = await msfApi.darkDimensionRoom(dd.id, ids[i]).catch(() => undefined);
+      if (r) found[ids[i]] = r;
+    }
+    setBusy(null);
+    setRooms((all) => ({ ...all, ...found }));
+  };
 
   const downloadAll = async () => {
     if (!dd) return;
@@ -159,7 +179,12 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
         <p className="muted">Loading map…</p>
       ) : (
         <>
-        {guide && <GuideOverview guide={guide} roster={roster} />}
+        {guide && (
+          <GuideOverview
+            guide={guide} roster={roster} squads={snapshot.squads} rooms={rooms}
+            onReadAll={() => void readAllRooms()} busy={busy}
+          />
+        )}
         <div className="dd-layout">
           <ol className="rooms">
             {roomOrder(dd).map((id) => {
@@ -208,6 +233,10 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
                     </div>
                   ) : null;
                 })()}
+                <div className="card">
+                  <p className="small"><strong>Best teams from your roster</strong> <span className="muted">· who can enter, kept together where they’re a team</span></p>
+                  <TeamPicks picks={bestTeams(roster, req, candidateTeams(roster, snapshot.squads, nodeTeam(guide, plainName(room.name ?? ''))))} />
+                </div>
                 <Waves title="Enemies" waves={room.combat?.right?.waves} />
                 <Waves title="Your side (preset units)" waves={room.combat?.left?.waves} />
                 {!room.combat && <p className="muted small">This room has no combat details.</p>}
@@ -223,7 +252,16 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
 }
 
 /** Every mission range's team from the guide, so the whole Dark Dimension can be planned without opening rooms. */
-function GuideOverview({ guide, roster }: { guide: DdGuide; roster: OwnedCharacter[] }) {
+function GuideOverview({ guide, roster, squads, rooms, onReadAll, busy }: {
+  guide: DdGuide; roster: OwnedCharacter[]; squads: Snapshot['squads']; rooms: Record<string, NodeInfo>; onReadAll: () => void; busy: string | null;
+}) {
+  // Requirements per mission number, from the rooms read so far.
+  const reqOf = new Map<number, Requirements | undefined>();
+  Object.values(rooms).forEach((r) => {
+    const n = Number(/(\d+)/.exec(plainName(r.name ?? ''))?.[1]);
+    if (n) reqOf.set(n, requirementsOf(r));
+  });
+  const known = (t: DdGuide['nodes'][number]) => [...reqOf.keys()].find((n) => n >= t.from && n <= t.to);
   const owned = (names: string[]) => names.filter((n) => {
     const c = findCharacter(n, roster);
     return c && isUnlocked(c);
@@ -242,9 +280,23 @@ function GuideOverview({ guide, roster }: { guide: DdGuide; roster: OwnedCharact
             <strong>{t.from === t.to ? `Mission ${t.from}` : `Missions ${t.from}–${t.to}`}</strong>{' '}
             <span className="muted small">{t.rule}{t.main.length ? ` · you own ${owned(t.main)} of ${t.main.length}` : ''}</span>
           </summary>
+          {(() => {
+            const n = known(t);
+            if (n === undefined) return null;
+            return (
+              <>
+                <p className="small"><strong>From your roster</strong></p>
+                <TeamPicks picks={bestTeams(roster, reqOf.get(n), candidateTeams(roster, squads, t), 2)} />
+                <p className="small"><strong>Guide pick</strong></p>
+              </>
+            );
+          })()}
           <TeamAdvice team={t} roster={roster} />
         </details>
       ))}
+      {reqOf.size === 0 && (
+        <button className="ghost small" onClick={onReadAll} disabled={!!busy}>{busy ?? 'Pick teams from my roster for every mission'}</button>
+      )}
     </details>
   );
 }

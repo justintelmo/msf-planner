@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import type { NodeTeam } from '../data/ddTeams';
-import { findCharacter } from '../planner/priority';
+import { CONTENT_TEAMS } from '../data/contentTeams';
+import type { CandidateTeam, TeamPick } from '../planner/ddPicker';
+import { compact } from '../planner/items';
+import { findCharacter, MODE_LABELS, resolveTeam } from '../planner/priority';
 import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
 import { CharName } from './Details';
 
@@ -31,4 +34,41 @@ export function TeamAdvice({ team, roster, eligible }: { team: NodeTeam; roster:
       )}
     </div>
   );
+}
+
+/** Roster-built teams for a node, strongest first. */
+export function TeamPicks({ picks }: { picks: TeamPick[] }) {
+  if (!picks.length) return <p className="small warn">Your roster can’t field a full team for this yet.</p>;
+  return (
+    <ol className="team-options">
+      {picks.map((p, i) => (
+        <li key={i}>
+          <p className="small">
+            <strong>{i === 0 ? 'Best: ' : ''}{p.label}</strong>{' '}
+            <span className="muted">· {compact(p.power)} power{p.core > 1 && p.core < p.members.length ? ` · ${p.core} together + ${p.members.length - p.core} fill-in` : ''}</span>
+          </p>
+          <ul className="team-picks">
+            {p.members.map((m) => (
+              <li key={m.info.id} className="team-pick">
+                <CharName id={m.info.id} portrait />
+                <span className="muted small">{compact(m.instance?.power ?? 0)}</span>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Teams worth trying for a node: the guide's pick, your saved squads and the curated content teams. */
+export function candidateTeams(roster: OwnedCharacter[], squads: Record<string, string[][]> | undefined, guideTeam?: NodeTeam): CandidateTeam[] {
+  const ids = (names: string[]) => names.map((n) => findCharacter(n, roster)?.info.id).filter((x): x is string => !!x);
+  const out: CandidateTeam[] = [];
+  if (guideTeam?.main.length) out.push({ label: 'Marvel Church pick', ids: ids([...guideTeam.main, ...(guideTeam.alts ?? [])]) });
+  for (const [mode, list] of Object.entries(squads ?? {})) {
+    list.forEach((sq, i) => out.push({ label: `Your ${MODE_LABELS[mode] ?? mode} squad ${i + 1}`, ids: sq.filter(Boolean) }));
+  }
+  for (const t of CONTENT_TEAMS) out.push({ label: `${t.team} (${t.content})`, ids: resolveTeam(t, roster).found.map((c) => c.info.id) });
+  return out;
 }
