@@ -11,6 +11,7 @@ import { isUnlocked, type OwnedCharacter } from '../planner/requirements';
 import { candidateTeams, EnemySummary, TeamAdvice, TeamPicks } from './DdTeams';
 import { bestTeams, boostLevel, enemyProfile, hardest, type PickContext } from '../planner/ddPicker';
 import type { KitTagHit } from '../planner/kitTags';
+import { killPlan, type KillTarget } from '../planner/killOrder';
 import { useKitsLoading, useKitTags, useLoadKits } from '../data/kits';
 
 /** Ability text is read for this many of the strongest characters who can enter each boosted mission. */
@@ -47,7 +48,7 @@ function waveTrigger(w: CombatWave, i: number): string {
   return parts.join('; ');
 }
 
-function Unit({ u }: { u: CombatUnit }) {
+function Unit({ u, rank, target, keep }: { u: CombatUnit; rank?: number; target?: KillTarget; keep?: boolean }) {
   const name = plainName(u.info?.name ?? u.id);
   const fx = u.nodeEffects;
   // Node overrides that let an enemy fire abilities far more often than normal.
@@ -58,10 +59,13 @@ function Unit({ u }: { u: CombatUnit }) {
   const boosts = fx?.boosts ? Object.entries(fx.boosts).filter(([k]) => ['health', 'damage'].includes(k)) : [];
   const flags = [u.nodeEffects?.boss && 'Boss', u.nodeEffects?.vip && 'VIP', u.nodeEffects?.target && 'Target'].filter(Boolean);
   return (
-    <li className="unit">
+    <li className={`unit${keep ? ' keep' : ''}`}>
+      {rank !== undefined && <span className="kill-rank" aria-label={`Kill order ${rank}`}>{rank}</span>}
       {u.info?.portrait ? <img src={u.info.portrait} alt="" /> : <span className="ph" />}
       <div>
         <strong>{name}</strong>
+        {keep && <span className="pill ready"> Keep for last</span>}
+        {target && target.reasons.length > 0 && <div className="small">{target.reasons.join(' · ')}</div>}
         {flags.length > 0 && <span className="pill short"> {flags.join(' · ')}</span>}
         {cheats.length > 0 && <div className="small warn">{cheats.join(' · ')}</div>}
         <div className="muted small">
@@ -75,19 +79,35 @@ function Unit({ u }: { u: CombatUnit }) {
   );
 }
 
-function Waves({ title, waves }: { title: string; waves?: CombatWave[] }) {
+function Waves({ title, waves, traitsOf }: { title: string; waves?: CombatWave[]; traitsOf?: (id: string) => string[] }) {
   if (!waves?.some((w) => w.units?.length)) return null;
+  // Enemy waves get a kill order; preset allies keep their listed order.
+  const plans = traitsOf ? killPlan(waves, traitsOf) : undefined;
   return (
     <div>
       <h3>{title}</h3>
-      {waves.map((w, i) => (
-        <div key={i} className="wave">
-          <p className="small"><strong>Wave {i + 1}.</strong> <span className="muted">{waveTrigger(w, i)}</span></p>
-          <ul className="units">
-            {(w.units ?? []).map((u, j) => <Unit key={j} u={Array.isArray(u) ? u[0] : u} />)}
-          </ul>
-        </div>
-      ))}
+      {plans && (
+        <p className="muted small">
+          Numbers are a suggested kill order: the most harm for the least health, counting damage, speed, node energy
+          cheats and role. Enemy abilities aren’t in the game data, so it’s a starting point, not a script.
+        </p>
+      )}
+      {waves.map((w, i) => {
+        const units = (w.units ?? []).map((u) => (Array.isArray(u) ? u[0] : u));
+        const plan = plans?.[i];
+        const keep = new Set(plan?.keepForLast);
+        return (
+          <div key={i} className="wave">
+            <p className="small"><strong>Wave {i + 1}.</strong> <span className="muted">{waveTrigger(w, i)}</span></p>
+            <ul className="units">
+              {plan
+                ? plan.order.map((t, r) => <Unit key={t.slot} u={t.unit} rank={r + 1} target={t} keep={keep.has(t.slot)} />)
+                : units.map((u, j) => <Unit key={j} u={u} />)}
+            </ul>
+            {plan?.next && <p className="small next-wave">{plan.next}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -105,6 +125,10 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
   /** Rooms read so far in this Dark Dimension, for planning every mission at once. */
   const [rooms, setRooms] = useState<Record<string, NodeInfo>>({});
   const kits = useKitTags();
+  const traitsOf = useMemo(() => {
+    const m = new Map(snapshot.characters.map((c) => [c.id, (c.traits ?? []).map((t) => (typeof t === 'string' ? t : t.id))]));
+    return (id: string) => m.get(id) ?? [];
+  }, [snapshot.characters]);
   const kitsLoading = useKitsLoading();
 
   // Boosted missions are judged by kit mechanics, so read the ability text of whoever could enter them.
@@ -265,7 +289,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
                     enemy={enemy} kitsRead={!kitsLoading}
                   />
                 </div>
-                <Waves title="Enemies" waves={room.combat?.right?.waves} />
+                <Waves title="Enemies" waves={room.combat?.right?.waves} traitsOf={traitsOf} />
                 <Waves title="Your side (preset units)" waves={room.combat?.left?.waves} />
                 {!room.combat && <p className="muted small">This room has no combat details.</p>}
                 <button className="ghost small" onClick={() => saveJson(`msf-dd-${ddId}-${roomId}.json`, room)}>Download room JSON</button>

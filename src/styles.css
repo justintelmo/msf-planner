@@ -269,3 +269,7 @@ details > summary { cursor: pointer; }
 .dd-guide > summary { cursor: pointer; }
 .dd-guide .guide-range { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
 .dd-guide .guide-range h3 { margin: 0; font-size: 14px; }
+
+.kill-rank { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--accent); color: var(--bg); }
+.unit.keep .kill-rank { background: var(--muted); }
+.next-wave { border-left: 3px solid var(--accent); padding-left: 8px; }
