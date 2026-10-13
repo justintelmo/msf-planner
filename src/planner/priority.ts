@@ -2,6 +2,8 @@ import { EN as strings } from '../i18n/en';
 import { charName, traitName } from '../i18n/names';
 import type { CharacterFilter, EventInfo, Squads } from '../api/types';
 import type { ContentTeam } from '../data/contentTeams';
+import type { CommunitySignal } from '../data/communitySignals';
+import { communityReasons, type Evidence } from './community';
 import { isUnlocked, matchesFilter, type OwnedCharacter } from './requirements';
 
 export const MODE_LABELS: Record<string, string> = strings.mode;
@@ -33,6 +35,10 @@ const EVENT_WEIGHT = 25;
 export interface Reason {
   label: string;
   weight: number;
+  /** A longer explanation, e.g. what players said. */
+  detail?: string;
+  /** Where it comes from. */
+  url?: string;
 }
 
 export interface Ranked {
@@ -52,6 +58,9 @@ export interface RankInput {
   contentFilters?: { name: string; filters: CharacterFilter[] }[];
   /** Goal names each character is picked for. */
   goalPicks?: Record<string, string[]>;
+  /** Community advice to weigh in, checked against the rest of this input. */
+  signals?: CommunitySignal[];
+  today?: string;
 }
 
 const THRESHOLDS: (keyof CharacterFilter)[] = ['level', 'activeYellow', 'activeRed', 'gearTier', 'iso8ClassLevel'];
@@ -212,6 +221,26 @@ export function rankCharacters(input: RankInput): Ranked[] {
         add(c.info.id, { label: `Fits ${fits} unlock events and Dark Dimensions`, weight: Math.min(VERSATILITY_CAP, fits * VERSATILITY_STEP) });
       }
     }
+  }
+
+  // Community advice last, so it can be checked against everything above.
+  if (input.signals?.length) {
+    const evidence = new Map<string, Evidence>();
+    const ev = (id: string) => {
+      let e = evidence.get(id);
+      if (!e) {
+        e = { squadModes: [], content: [], goals: input.goalPicks?.[id] ?? [], fits: 0 };
+        evidence.set(id, e);
+      }
+      return e;
+    };
+    for (const mode of input.modeOrder) (input.squads[mode] ?? []).flat().forEach((id) => id && !ev(id).squadModes.includes(mode) && ev(id).squadModes.push(mode));
+    for (const team of input.contentTeams) resolveTeam(team, input.owned).found.forEach((c) => !ev(c.info.id).content.includes(team.content) && ev(c.info.id).content.push(team.content));
+    for (const [id, rs] of reasons) {
+      const fit = rs.find((r) => r.label.startsWith('Fits '));
+      if (fit) ev(id).fits = Number(/\d+/.exec(fit.label)?.[0] ?? 0);
+    }
+    communityReasons(input.signals, input.owned, ev, input.today).forEach((rs, id) => rs.forEach((r) => add(id, r)));
   }
 
   const byId = new Map(input.owned.map((c) => [c.info.id, c]));

@@ -8,7 +8,7 @@ export interface StepCase {
   /** What makes the step itself worth doing. */
   worth: string;
   /** Why this character gets materials before others, strongest reason first. */
-  character: { label: string; weight: number }[];
+  character: Reason[];
   /** What it costs, in gold and in scarce materials. */
   cost: string;
   /** Why it sits above the step after it, when there is one. */
@@ -61,7 +61,7 @@ export function explainStep(
   next?: ScheduledStep,
 ): StepCase {
   const w = s.why;
-  const character = [...(reasons ?? [])].sort((a, b) => b.weight - a.weight).map((r) => ({ label: r.label, weight: r.weight }));
+  const character = [...(reasons ?? [])].sort((a, b) => b.weight - a.weight);
   const who = nameOf(s.characterId);
   const top = character[0]?.label;
 

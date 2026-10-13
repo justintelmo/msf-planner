@@ -20,6 +20,7 @@ import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
 import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
 import { savePlanned } from '../data/planHistory';
+import { COMMUNITY_SIGNALS } from '../data/communitySignals';
 import StepWhy, { type WhyTarget } from './StepWhy';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
@@ -175,6 +176,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => rankCharacters({
       owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events,
       contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? charName(undefined, id)),
+      signals: COMMUNITY_SIGNALS,
     }),
     [owned, snapshot, modeOrder, catalog, reports, names],
   );

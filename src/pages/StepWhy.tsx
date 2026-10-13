@@ -46,7 +46,15 @@ const StepWhy = forwardRef<HTMLDialogElement, { target: WhyTarget | null; reason
                 <h3 className="small">The character</h3>
                 {c.character.length ? (
                   <ul className="why-reasons small">
-                    {c.character.map((r) => <li key={r.label}><span>{r.label}</span><span className="muted">+{r.weight}</span></li>)}
+                    {c.character.map((r) => (
+                      <li key={r.label}>
+                        <span>
+                          {r.url ? <a href={r.url} target="_blank" rel="noreferrer">{r.label}</a> : r.label}
+                          {r.detail && <span className="muted"> {r.detail}</span>}
+                        </span>
+                        <span className={r.weight < 0 ? 'warn' : 'muted'}>{r.weight < 0 ? `−${-r.weight}` : `+${r.weight}`}</span>
+                      </li>
+                    ))}
                   </ul>
                 ) : <p className="small muted">Here for an unlock goal only.</p>}
               </section>
