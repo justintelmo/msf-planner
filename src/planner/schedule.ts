@@ -46,6 +46,24 @@ export interface ScheduledStep extends Step {
   /** What it takes from the inventory, including the materials crafting and fusing use. */
   uses?: Cost;
   score: number;
+  why: StepWhy;
+}
+
+/** The parts of a step's score, so the plan can explain where it ranks. */
+export interface StepWhy {
+  /** Worth of the step kind, before the character's weight (e.g. gear tier 10, ability 4). */
+  value: number;
+  /** 1 + the character's priority score / 20. */
+  weight: number;
+  /** It moves an unlock goal threshold, which counts triple. */
+  goal: boolean;
+  /** Costs that can't be checked count half. */
+  unchecked: boolean;
+  /** 1 + gold / 250K + the biggest share of one material's stock it uses. */
+  price: number;
+  /** That biggest share (0.5 = half of what you hold), and the item. */
+  share: number;
+  scarcest?: string;
 }
 
 export interface Schedule {
@@ -83,12 +101,13 @@ class Stock {
   }
 
   /** What taking `cost` would use, crafting missing pieces when a recipe exists. */
-  trial(cost: Cost): { gold: number; share: number; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
+  trial(cost: Cost): { gold: number; share: number; scarcest?: string; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
     let gold = 0;
     // The largest share of any one material's stock this uses: 0.5 = half of the scarcest one.
     let share = 0;
+    let scarcest: string | undefined;
     const missing = new Map<string, number>();
     // Everything taken from the inventory, including what crafting and fusing ate.
     const usedItems = new Map<string, number>();
@@ -108,7 +127,11 @@ class Stock {
       if (used) {
         overlay.set(item, have - used);
         usedItems.set(item, (usedItems.get(item) ?? 0) + used);
-        share = Math.max(share, used / Math.max(1, this.has(item)));
+        const part = used / Math.max(1, this.has(item));
+        if (part > share) {
+          share = part;
+          scarcest = item;
+        }
       }
       const rest = qty - used;
       if (!rest) return;
@@ -124,6 +147,7 @@ class Stock {
     return {
       gold,
       share,
+      scarcest,
       used: [...usedItems].map(([item, quantity]) => ({ item, quantity })),
       missing: [...missing].map(([item, quantity]) => ({ item, quantity })),
       crafted,
@@ -395,7 +419,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       // Costs that can't be checked (ions without balances) count as one full stock.
       const price = 1 + trial.gold / GOLD_UNIT + trial.share + (o.unchecked ? 1 : 0);
       const score = (o.value * weight * (forGoal ? GOAL_BOOST : 1) * (o.unchecked ? UNCHECKED_FACTOR : 1)) / price;
-      return { cur, o, trial, score, forGoal };
+      return { cur, o, trial, score, forGoal, weight, price };
     });
   };
 
@@ -404,6 +428,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     cost: e.o.cost, missing: e.trial.missing, status, gold: e.trial.gold, score: e.score,
     crafted: e.trial.crafted.length ? e.trial.crafted : undefined, uses: e.trial.used, modeEffects: e.o.modeEffects,
     goal: e.forGoal ? targets[e.cur.c.info.id]?.why : undefined,
+    why: { value: e.o.value, weight: e.weight, goal: e.forGoal, unchecked: !!e.o.unchecked, price: e.price, share: e.trial.share, scarcest: e.trial.scarcest },
   });
 
   // A cursor's options only change when it is upgraded or when an item it looked at is used,

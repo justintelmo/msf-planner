@@ -57,4 +57,22 @@ describe('reviewSync', () => {
     expect(r.missed).toEqual(['B']);
     expect(r.materials).toEqual(['Training modules: −60', 'Character shards: +20']);
   });
+
+  it('counts a step from the previous upgrade list as good even when the character ranks low', () => {
+    const ranked = Array.from({ length: 30 }, (_, i) => ({ character: char(`R${i}`, []), score: 100 - i, reasons: [] }));
+    ranked.push({ character: char('Low', []), score: 1, reasons: [] });
+    const r = reviewSync({
+      ...base, ranked, before: before([inst('Low'), inst('Other')]),
+      owned: [char('Low', [], { gearTier: 15 }), char('Other', [], { special: 6 })], inventory: {}, events: [],
+      planned: [
+        { characterId: 'Low', kind: 'gear', title: 'Gear tier 14 → 15', rank: 1 },
+        { characterId: 'Other', kind: 'gear', title: 'Gear tier 14 → 15', rank: 2 },
+      ],
+    });
+    const byId = Object.fromEntries(r.characters.map((c) => [c.characterId, c]));
+    expect(byId.Low.verdict).toBe('good');
+    expect(byId.Low.why[0]).toBe('#1 on your upgrade list (Gear tier 14 → 15)');
+    expect(byId.Other.verdict).toBe('ok');
+    expect(byId.Other.why[0]).toContain('not what was done');
+  });
 });

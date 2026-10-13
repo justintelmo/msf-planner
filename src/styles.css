@@ -273,3 +273,30 @@ details > summary { cursor: pointer; }
 .kill-rank { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--accent); color: var(--bg); }
 .unit.keep .kill-rank { background: var(--muted); }
 .next-wave { border-left: 3px solid var(--accent); padding-left: 8px; }
+
+/* Plan: tap a step to see why it ranks where it does. */
+.step-title { display: inline; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.step-title:hover, .step-title:focus-visible { color: var(--accent); }
+.why-hint { font-size: 11px; color: var(--accent); text-decoration: none; display: inline-block; margin-left: 2px; }
+@media (pointer: coarse) { .step-title { padding: 6px 0; } }
+.why-sheet { max-height: 88dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.why-body { container-type: inline-size; }
+.why-step { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.why-step .char-name img, .why-step .char-name .ph { width: 48px; height: 48px; }
+.why-summary { font-size: 15px; line-height: 1.45; margin: 0 0 12px; }
+.why-grid { display: grid; gap: 4px 20px; }
+.why-grid section { min-width: 0; }
+.why-grid h3 { margin: 8px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+.why-grid p { margin: 0 0 6px; line-height: 1.4; }
+.why-reasons { list-style: none; margin: 0; padding: 0; }
+.why-reasons li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+/* Wide sheets (desktop, or a Fold opened flat) use two columns. */
+@container (min-width: 560px) { .why-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 721px) { .why-sheet { width: min(760px, 92vw); } }
+/* Foldables half-open: keep the sheet on one panel instead of across the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  .why-sheet, .sheet { position: fixed; margin: 0; inset: 0 auto 0 env(viewport-segment-left 1 0); width: env(viewport-segment-width 1 0); max-height: 100dvh; border-radius: 0; }
+}
+@media (vertical-viewport-segments: 2) {
+  .why-sheet, .sheet { position: fixed; margin: 0; inset: env(viewport-segment-top 0 1) 0 auto 0; width: 100%; height: env(viewport-segment-height 0 1); max-height: none; border-radius: 12px 12px 0 0; }
+}

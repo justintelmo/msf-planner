@@ -19,6 +19,8 @@ import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
 import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
+import { savePlanned } from '../data/planHistory';
+import StepWhy, { type WhyTarget } from './StepWhy';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
 import { describeGap, mergeTargets, type Target } from '../planner/gaps';
 import { DEFAULT_MODE_ORDER, MODE_LABELS, modeWeights, rankCharacters, resolveTeam, withAllModes } from '../planner/priority';
@@ -213,6 +215,15 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
     });
   }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores]);
+  const whyRef = useRef<HTMLDialogElement>(null);
+  const [why, setWhy] = useState<WhyTarget | null>(null);
+  const openWhy = (step: ScheduledStep) => {
+    const i = schedule.steps.indexOf(step);
+    setWhy({ step, rank: i + 1, next: schedule.steps[i + 1] });
+    whyRef.current?.showModal();
+  };
+  // Remember this list, so the next sync can tell whether you followed it.
+  useEffect(() => savePlanned(snapshot.source, snapshot.syncedAt, schedule.steps), [schedule, snapshot.source, snapshot.syncedAt]);
   // Days of store income a blocked step still needs, from the store currency it's short of.
   const storeDays = (missing: { item: string; quantity: number }[]) => {
     const waits = stores.currencies.flatMap((c) => {
@@ -304,6 +315,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <section className="plan">
+      <StepWhy ref={whyRef} target={why} reasons={why ? reasonsOf.get(why.step.characterId)?.reasons : undefined} onClose={() => setWhy(null)} />
       <SyncReview
         snapshot={snapshot} owned={owned} ranked={ranked} targets={targets} nameOf={nameOf}
         targetsFor={(o) => goalTargets([...goalReports(activeGoals(allGoals, o, hideDone), catalog, o), ...modeReports(modeGoals, catalog, o, snapshot.squads ?? {})], nameOf)}
@@ -476,7 +488,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             <ol className="steps">
               {list.map((s, i) => (
                 <li key={i}>
-                  <CharName id={s.characterId} />: {s.title}
+                  <CharName id={s.characterId} />:{' '}
+                  <button type="button" className="step-title" aria-haspopup="dialog" onClick={() => openWhy(s)}>
+                    {s.title} <span className="why-hint" aria-hidden="true">why?</span>
+                  </button>
                   {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
                   {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}

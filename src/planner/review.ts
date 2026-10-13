@@ -1,5 +1,7 @@
 import { ABILITY_SLOTS, type CharacterFilter, type CharacterInstance, type EventInfo } from '../api/types';
+import type { PlannedStep } from '../data/planHistory';
 import type { SyncPrint } from '../data/syncHistory';
+import type { StepKind } from './build';
 import type { Target } from './gaps';
 import type { Ranked } from './priority';
 import { isoClassLevel, matchesFilter, type OwnedCharacter } from './requirements';
@@ -42,12 +44,16 @@ export interface ReviewInput {
   prevTargets?: Record<string, { target: Target; why: string }>;
   /** Item ids of training modules, from the XP tables. */
   trainingIds?: Set<string>;
+  /** The top of the priority (upgrade) list as it stood after the previous sync. */
+  planned?: PlannedStep[];
   nameOf: (id: string) => string;
   now?: number;
 }
 
-/** Ranks at or above this count as "near the top" of the priority list. */
+/** Ranks at or above this count as "near the top" of the character ranking. */
 const TOP_RANK = 25;
+/** Steps this high on the previous upgrade list count as following the plan. */
+const TOP_STEPS = 40;
 const THRESHOLDS: (keyof CharacterFilter)[] = ['level', 'activeYellow', 'activeRed', 'gearTier', 'iso8ClassLevel'];
 const loose = (f: CharacterFilter): CharacterFilter => {
   const out = { ...f };
@@ -61,39 +67,43 @@ const lowerFor = (why: string) => why.replace(/^For /, 'for ');
 const ABILITY_NAMES = { basic: 'Basic', special: 'Special', ultimate: 'Ultimate', passive: 'Passive' } as const;
 
 /** What changed on one character, with a rough effort score (gear and stars weigh most). */
-function diff(a: CharacterInstance | undefined, b: CharacterInstance): { changes: string[]; effort: number } {
+function diff(a: CharacterInstance | undefined, b: CharacterInstance): { changes: string[]; effort: number; kinds: Set<StepKind> } {
   const changes: string[] = [];
+  const kinds = new Set<StepKind>();
   let effort = 0;
-  const step = (label: string, from: number, to: number, weight: number, fmt = (n: number) => String(n)) => {
+  const step = (kind: StepKind, label: string, from: number, to: number, weight: number, fmt = (n: number) => String(n)) => {
     if (to > from) {
       changes.push(`${label} ${fmt(from)} → ${fmt(to)}`);
+      kinds.add(kind);
       effort += (to - from) * weight;
     }
   };
   if (!a || !(a.activeYellow ?? 0)) {
     if (b.activeYellow) {
       changes.push(`Unlocked at ${b.activeYellow}★`);
+      kinds.add('stars');
       effort += 3;
     }
-    if (!a) return { changes, effort };
+    if (!a) return { changes, effort, kinds };
   }
-  step('Level', a.level ?? 0, b.level ?? 0, 0.2);
-  if (a.activeYellow) step('Stars', a.activeYellow ?? 0, b.activeYellow ?? 0, 2, (n) => `${n}★`);
-  step('Red stars', a.activeRed ?? 0, b.activeRed ?? 0, 2);
-  step('Gear', a.gearTier ?? 0, b.gearTier ?? 0, 3);
+  step('level', 'Level', a.level ?? 0, b.level ?? 0, 0.2);
+  if (a.activeYellow) step('stars', 'Stars', a.activeYellow ?? 0, b.activeYellow ?? 0, 2, (n) => `${n}★`);
+  step('stars', 'Red stars', a.activeRed ?? 0, b.activeRed ?? 0, 2);
+  step('gear', 'Gear', a.gearTier ?? 0, b.gearTier ?? 0, 3);
   if ((b.gearTier ?? 0) === (a.gearTier ?? 0)) {
     const slots = (b.gearSlots ?? []).filter(Boolean).length - (a.gearSlots ?? []).filter(Boolean).length;
     if (slots > 0) {
       changes.push(`${slots} gear piece${slots > 1 ? 's' : ''} equipped`);
+      kinds.add('gear');
       effort += slots * 0.5;
     }
   }
-  for (const s of ABILITY_SLOTS) step(ABILITY_NAMES[s], a[s] ?? 0, b[s] ?? 0, 1);
+  for (const s of ABILITY_SLOTS) step('ability', ABILITY_NAMES[s], a[s] ?? 0, b[s] ?? 0, 1);
   const isoA = isoClassLevel(a);
   const isoB = isoClassLevel(b);
   if (b.iso8?.active && b.iso8.active !== a.iso8?.active) changes.push(`ISO-8 class set to ${b.iso8.active}`);
-  step('ISO-8', isoA, isoB, 1);
-  return { changes, effort };
+  step('iso', 'ISO-8', isoA, isoB, 1);
+  return { changes, effort, kinds };
 }
 
 const fieldOf = (i: CharacterInstance | undefined, f: keyof Target): number =>
@@ -130,7 +140,7 @@ export function reviewSync(input: ReviewInput): SyncReview {
     const after = c.instance;
     if (!after) continue;
     const prev = prevById.get(c.info.id);
-    const { changes, effort } = diff(prev, after);
+    const { changes, effort, kinds } = diff(prev, after);
     if (!changes.length) continue;
 
     const good: string[] = [];
@@ -158,9 +168,15 @@ export function reviewSync(input: ReviewInput): SyncReview {
       else if (!ended) neutral.push(`Fits ${eventName(e)}, running now`);
     }
 
+    // The upgrade list you were working from: a step near its top that you did is following the plan.
+    const planned = (input.planned ?? []).filter((p) => p.characterId === id && p.rank <= TOP_STEPS);
+    const done = planned.filter((p) => kinds.has(p.kind));
+    if (done.length) good.push(`#${done[0].rank} on your upgrade list (${done.map((p) => p.title).join(', ')})`);
+    else if (planned.length) neutral.push(`On your upgrade list at #${planned[0].rank} for ${planned[0].title}, not what was done`);
+
     const r = rank.get(id);
-    if (r && r.i <= TOP_RANK) good.push(`#${r.i} on your priority list (${r.r.reasons[0]?.label ?? 'priority'})`);
-    else if (r) neutral.push(`#${r.i} on your priority list`);
+    if (r && r.i <= TOP_RANK) good.push(`#${r.i} in your character ranking (${r.r.reasons[0]?.label ?? 'priority'})`);
+    else if (r) neutral.push(`#${r.i} in your character ranking`);
 
     let verdict: Verdict;
     let why: string[];

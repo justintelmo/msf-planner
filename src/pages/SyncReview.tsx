@@ -2,6 +2,7 @@ import { CharName } from './Details';
 import { useEffect, useMemo, useState } from 'react';
 import { readJson, writeJson } from '../auth/storage';
 import type { Snapshot } from '../data/store';
+import { plannedAt } from '../data/planHistory';
 import { readHistory } from '../data/syncHistory';
 import type { Target } from '../planner/gaps';
 import type { Ranked } from '../planner/priority';
@@ -54,6 +55,7 @@ export default function SyncReview({ snapshot, owned, ranked, targets, targetsFo
     });
     return reviewSync({
       before, owned, inventory, events: snapshot.events, ranked, targets, prevTargets: targetsFor(prevOwned), nameOf,
+      planned: plannedAt(before.source, before.syncedAt),
       trainingIds: new Set((snapshot.upgrades?.characterXpCosts ?? []).flatMap((w) => w.cost.map((c) => c.item))),
     });
     // targetsFor and nameOf change identity each render; the data they read is covered by the rest.
