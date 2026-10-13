@@ -235,7 +235,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const byDay = useMemo(() => {
     const groups = new Map<string, ScheduledStep[]>();
     for (const st of schedule.steps) {
-      const key = st.day === undefined ? 'In this order' : st.day === 0 ? 'Today, with the gold you have' : `Day ${st.day}`;
+      const key = st.day === undefined ? 'In this order' : st.day === 0 ? 'Today, with the resources you have:' : `Day ${st.day}`;
       groups.set(key, [...(groups.get(key) ?? []), st]);
     }
     return [...groups];
@@ -495,18 +495,6 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                   {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
                   {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
-                  <div className="step-cost">
-                    {(() => {
-                      const mats = (s.uses ?? s.cost).filter((c) => !s.crafted?.includes(c.item) && c.item !== 'SC');
-                      return mats.length ? <CostChips cost={mats} label={label} /> : <span className="muted small">no materials</span>;
-                    })()}
-                    <span className="muted small">
-                      {s.crafted && `crafts ${s.crafted.length} ${s.kind === 'iso' ? 'crystal' : 'piece'}${s.crafted.length > 1 ? 's' : ''}`}
-                      {s.crafted && s.gold > 0 && ' · '}
-                      {s.gold > 0 && `${compact(s.gold)} gold`}
-                    </span>
-                  </div>
-                  {s.detail && <div className="muted small">{s.detail}</div>}
                 </li>
               ))}
             </ol>

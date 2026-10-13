@@ -53,7 +53,12 @@ const StepWhy = forwardRef<HTMLDialogElement, { target: WhyTarget | null; reason
               <section>
                 <h3 className="small">The cost</h3>
                 <p className="small">{c.cost}</p>
-                {(s.uses ?? s.cost).some((x) => x.item !== 'SC') && <CostChips cost={(s.uses ?? s.cost).filter((x) => x.item !== 'SC')} />}
+                {(() => {
+                  // What it takes from your inventory; pieces it crafts show as their materials.
+                  const mats = (s.uses ?? s.cost).filter((x) => x.item !== 'SC' && !s.crafted?.includes(x.item));
+                  return mats.length ? <CostChips cost={mats} /> : null;
+                })()}
+                {s.detail && <p className="muted small">{s.detail}</p>}
               </section>
               {c.versus && (
                 <section>
