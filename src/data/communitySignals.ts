@@ -4,6 +4,10 @@
  * The weekly meta scan (scripts/reddit-scan.py) updates this file: add, retire or re-date signals,
  * and keep `checked` current. Each signal is weighed against game data before it counts
  * (src/planner/community.ts). Post dates known only to the month use the 1st.
+ *
+ * Trait ids and character names: Telmo corrects these by hand. When a scan can't confirm the game's
+ * id for a trait or character, don't guess silently: ask Telmo in the reply and apply his answer.
+ * Unconfirmed so far: 'UncannyAvenger', 'IronRaider', 'AmazingAvenger'.
  */
 
 export type Stance =
