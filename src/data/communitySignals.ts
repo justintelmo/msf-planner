@@ -7,7 +7,7 @@
  *
  * Trait ids and character names: Telmo corrects these by hand. When a scan can't confirm the game's
  * id for a trait or character, don't guess silently: ask Telmo in the reply and apply his answer.
- * Unconfirmed so far: 'UncannyAvenger', 'IronRaider', 'AmazingAvenger'.
+ * Confirmed by Telmo 2026-10-13: 'UncannyAvenger', 'IronRaider', 'AmazingAvenger'.
  */
 
 export type Stance =
