@@ -23,20 +23,22 @@ export function setTraitNames(names: Record<string, string>) {
   listeners.forEach((l) => l());
 }
 
-/** "FantasticFourMCU" → "Fantastic Four MCU", "XMen" → "X Men": a readable fallback for unknown ids. */
+/** "FantasticFourMCU" → "Fantastic Four (MCU)", "SpiderManNoir" → "Spider-Man Noir": a readable fallback for unknown ids. */
 export function humanize(id: string): string {
-  return id
+  const words = id
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .replace(/(\d)([A-Za-z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim();
+  // Marvel spellings: Spider-Man, Ant-Man, Ms. Marvel, Kang the Conqueror.
+  return EN.wordFixes.reduce((s, [re, to]) => s.replace(re, to as string), words);
 }
 
 /** A character's display name, or its id split into words when the game sent no name. */
 export function charName(info: { id: string; name?: string } | undefined, id = info?.id ?? ''): string {
-  return plainName(info?.name) || humanize(id);
+  return plainName(info?.name) || EN.character[id] || humanize(id);
 }
 
 /** A trait's display name: our override, then the game's name, then the id split into words. */

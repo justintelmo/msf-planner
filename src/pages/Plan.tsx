@@ -1,4 +1,4 @@
-import { charName, humanize, strings } from '../i18n';
+import { charName, strings } from '../i18n';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type GearTiers } from '../api/types';
@@ -139,7 +139,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const stores = useDeferredValue(useStores());
   const label = (id: string) =>
     stores.currencies.find((c) => currencyItem(c.id) === id)?.name ?? itemLabel(id, (key) => names.get(key));
-  const nameOf = (id: string) => names.get(id) ?? humanize(id);
+  const nameOf = (id: string) => names.get(id) ?? charName(undefined, id);
 
   const [modeOrder, setModeOrder] = useState<string[]>(() => withAllModes(readJson(localStorage, MODES_KEY) ?? DEFAULT_MODE_ORDER));
   const moveUp = (i: number) => {
@@ -170,11 +170,11 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => [...goalReports(goals, catalog, owned), ...modeReports(modeGoals, catalog, owned, snapshot.squads ?? {})],
     [goals, catalog, owned, modeGoals, snapshot.squads],
   );
-  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? humanize(id)), [reports, names]);
+  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? charName(undefined, id)), [reports, names]);
   const ranked = useMemo(
     () => rankCharacters({
       owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events,
-      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? humanize(id)),
+      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? charName(undefined, id)),
     }),
     [owned, snapshot, modeOrder, catalog, reports, names],
   );
