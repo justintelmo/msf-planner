@@ -14,7 +14,7 @@ describe('explainStep', () => {
   it('names the goal, the top reason and the scarce material', () => {
     const c = explainStep(step({ goal: 'For Odin', why: { value: 10, weight: 4, goal: true, unchecked: false, price: 2, share: 0.5, scarcest: 'GEAR_X' } }), 1,
       [{ label: 'Raids squad', weight: 50 }, { label: 'Crucible squad', weight: 20 }], id, () => 'Gear X');
-    expect(c.summary).toBe('#1 because it moves A toward the bar for Odin, which counts triple, and A ranks high for “Raids squad” and 1 more reason.');
+    expect(c.summary).toBe('#1 because it moves A toward the bar for Odin, which counts nine times over, and A ranks high for “Raids squad” and 1 more reason.');
     expect(c.cost).toBe('200K gold and 50% of your Gear X.');
     expect(c.worth).toMatch(/biggest single stat jump/);
   });

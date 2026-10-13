@@ -478,7 +478,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       <h2 id="priority">Priority list</h2>
       <p className="muted small">
         Levels, abilities, gear, stars and ISO-8 across your roster, best value for the gold first. Unlock-goal thresholds
-        count triple; characters that fit many modes, events and goals rank higher. Gear is crafted from your materials
+        come first; characters on your strongest squads, goals and content teams rank higher, and squads far weaker than
+        your best one in a mode barely count. Gear is crafted from your materials
         when a recipe is known. {gold === undefined && 'Enter gold on hand and gold per day to see which day each step fits.'}
       </p>
       {schedule.steps.length === 0 ? (

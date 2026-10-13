@@ -144,6 +144,16 @@ export function resolveTeam(team: ContentTeam, owned: OwnedCharacter[]): { found
   return { found, missing };
 }
 
+/**
+ * How much a saved squad counts, from its power against the strongest squad saved for the mode.
+ * Game modes keep every squad ever saved, so old teams linger there: a squad at half the power
+ * of your best one or less counts nothing, and it rises to full weight at 90%.
+ */
+export function squadShare(power: number, top: number): number {
+  if (!top) return 1;
+  return Math.max(0, Math.min(1, (power / top - 0.5) / 0.4));
+}
+
 /** Traits this many characters share are categories, not teams. */
 const CATEGORY_SIZE = 40;
 /** Alignment, origin, location and role traits, which never name a team. */
@@ -185,17 +195,26 @@ export function rankCharacters(input: RankInput): Ranked[] {
   const add = (id: string, r: Reason) => reasons.set(id, [...(reasons.get(id) ?? []), r]);
 
   const name = squadNamer(input.owned);
+  const squadModes = new Map<string, string[]>();
+  const powerOf = new Map(input.owned.map((c) => [c.info.id, c.instance?.power ?? 0]));
   for (const mode of input.modeOrder) {
-    const seen = new Set<string>();
-    (input.squads[mode] ?? []).forEach((squad) => {
-      const ids = squad.filter(Boolean);
-      const label = `${MODE_LABELS[mode] ?? mode} squad: ${name(ids)}`;
+    const squads = (input.squads[mode] ?? []).map((squad) => squad.filter(Boolean)).filter((ids) => ids.length);
+    const power = squads.map((ids) => ids.reduce((s, id) => s + (powerOf.get(id) ?? 0), 0));
+    const top = Math.max(0, ...power);
+    // Each character counts once per mode, under their strongest squad.
+    const best = new Map<string, Reason>();
+    squads.forEach((ids, i) => {
+      const share = squadShare(power[i], top);
+      const weight = Math.round(weights[mode] * share);
+      if (!weight) return;
+      const label = `${MODE_LABELS[mode] ?? mode} squad: ${name(ids)}${share < 1 ? ` (${Math.round((power[i] / top) * 100)}% of your strongest)` : ''}`;
       ids.forEach((id) => {
-        // A character saved on two squads of one mode counts once, under the first.
-        if (seen.has(id)) return;
-        seen.add(id);
-        add(id, { label, weight: weights[mode] });
+        if ((best.get(id)?.weight ?? 0) < weight) best.set(id, { label, weight });
       });
+    });
+    best.forEach((r, id) => {
+      add(id, r);
+      squadModes.set(id, [...(squadModes.get(id) ?? []), mode]);
     });
   }
   for (const team of input.contentTeams) {
@@ -213,7 +232,8 @@ export function rankCharacters(input: RankInput): Ranked[] {
   // Characters whose traits fit many unlock events and Dark Dimensions keep paying off.
   if (input.contentFilters?.length) {
     const traited = input.contentFilters
-      .map((s) => ({ ...s, filters: s.filters.filter((f) => f.allTraits?.length || f.anyTraits?.length || f.anyCharacters?.length).map(looseOf) }))
+      // Origin, side and role traits ("any Cosmic") fit most of the roster, so only team traits and named characters count.
+      .map((s) => ({ ...s, filters: s.filters.filter((f) => f.anyCharacters?.length || [...(f.allTraits ?? []), ...(f.anyTraits ?? [])].some((t) => !CATEGORIES.has(typeof t === 'string' ? t : t.id))).map(looseOf) }))
       .filter((s) => s.filters.length);
     for (const c of input.owned) {
       const fits = traited.filter((s) => s.filters.some((f) => matchesFilter(c, f))).length;
@@ -229,12 +249,11 @@ export function rankCharacters(input: RankInput): Ranked[] {
     const ev = (id: string) => {
       let e = evidence.get(id);
       if (!e) {
-        e = { squadModes: [], content: [], goals: input.goalPicks?.[id] ?? [], fits: 0 };
+        e = { squadModes: squadModes.get(id) ?? [], content: [], goals: input.goalPicks?.[id] ?? [], fits: 0 };
         evidence.set(id, e);
       }
       return e;
     };
-    for (const mode of input.modeOrder) (input.squads[mode] ?? []).flat().forEach((id) => id && !ev(id).squadModes.includes(mode) && ev(id).squadModes.push(mode));
     for (const team of input.contentTeams) resolveTeam(team, input.owned).found.forEach((c) => !ev(c.info.id).content.includes(team.content) && ev(c.info.id).content.push(team.content));
     for (const [id, rs] of reasons) {
       const fit = rs.find((r) => r.label.startsWith('Fits '));

@@ -54,7 +54,7 @@ export interface ScheduledStep extends Step {
 export interface StepWhy {
   /** Worth of the step kind, before the character's weight (e.g. gear tier 10, ability 4). */
   value: number;
-  /** 1 + the character's priority score / 20. */
+  /** (1 + the character's priority score / 20) squared. */
   weight: number;
   /** It moves an unlock goal threshold, which counts triple. */
   goal: boolean;
@@ -195,7 +195,8 @@ const ION_PREFIX = 'ISO8-TIER-';
 
 const VALUE = { gear: 10, stars: 8, unlock: 12, iso: 4, level: 2, levelUnlocksAbility: 4 };
 /** Goal threshold steps outrank everything else, matching the agreed catch-up strategy. */
-const GOAL_BOOST = 3;
+/** Goal steps count this many times over; squared like the priority weight, so goals keep their lead. */
+export const GOAL_BOOST = 9;
 /** Steps with costs the API can't check (ions, XP when tables are missing) count for less. */
 const UNCHECKED_FACTOR = 0.5;
 /** Gold that counts as much as using up one material's whole stock. */
@@ -409,7 +410,8 @@ export function buildSchedule(input: ScheduleInput): Schedule {
 
   const evaluate = (cur: Cursor) => {
     const id = cur.c.info.id;
-    const weight = 1 + (input.priority[id] ?? 0) / 20;
+    // Squared, so a character your plan leans on outweighs a cheap step on one it barely uses.
+    const weight = (1 + (input.priority[id] ?? 0) / 20) ** 2;
     const target = targets[id]?.target;
     return options(cur, input, stock).map((o) => {
       // Unchecked costs (ions without balances) only charge their gold.
@@ -418,7 +420,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       // Price is gold plus how much of each material stock it eats (all of one stock ≈ 250K gold),
       // so cheap-in-gold steps that burn scarce materials or ions don't jump the queue.
       // Costs that can't be checked (ions without balances) count as one full stock.
-      const price = 1 + trial.gold / GOLD_UNIT + trial.share + (o.unchecked ? 1 : 0);
+      const price = 1 + Math.sqrt(trial.gold / GOLD_UNIT) + trial.share + (o.unchecked ? 1 : 0);
       const score = (o.value * weight * (forGoal ? GOAL_BOOST : 1) * (o.unchecked ? UNCHECKED_FACTOR : 1)) / price;
       return { cur, o, trial, score, forGoal, weight, price };
     });

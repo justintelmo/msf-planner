@@ -1,5 +1,5 @@
 import type { Reason } from './priority';
-import type { ScheduledStep } from './schedule';
+import { GOAL_BOOST, type ScheduledStep } from './schedule';
 
 /** A plain-language case for a step's place in the priority list. */
 export interface StepCase {
@@ -73,7 +73,7 @@ export function explainStep(
   ].filter(Boolean).join(' ') + '.';
 
   const parts = [
-    w.goal && s.goal ? `it moves ${who} toward the bar ${s.goal.replace(/^For /, 'for ')}, which counts triple` : '',
+    w.goal && s.goal ? `it moves ${who} toward the bar ${s.goal.replace(/^For /, 'for ')}, which counts nine times over` : '',
     top ? `${who} ranks high for “${top}”${character.length > 1 ? ` and ${character.length - 1} more reason${character.length > 2 ? 's' : ''}` : ''}` : '',
     w.price < 1.3 ? 'it’s cheap for what it gives' : '',
   ].filter(Boolean);
@@ -83,7 +83,7 @@ export function explainStep(
   let versus: string | undefined;
   if (next) {
     const n = next.why;
-    const worth = (x: typeof w) => x.value * (x.goal ? 3 : 1) * (x.unchecked ? 0.5 : 1);
+    const worth = (x: typeof w) => x.value * (x.goal ? GOAL_BOOST : 1) * (x.unchecked ? 0.5 : 1);
     const ratios: [string, number][] = [
       [n.goal && !w.goal ? '' : w.goal && !n.goal ? 'it moves an unlock goal and that one doesn’t' : 'the step itself is worth more', worth(w) / worth(n)],
       [`${who} matters more to your plan than ${nameOf(next.characterId)}`, w.weight / n.weight],
