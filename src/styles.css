@@ -277,7 +277,6 @@ details > summary { cursor: pointer; }
 /* Plan: tap a step to see why it ranks where it does. */
 .step-title { display: inline; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
 .step-title:hover, .step-title:focus-visible { color: var(--accent); }
-.why-hint { font-size: 11px; color: var(--accent); text-decoration: none; display: inline-block; margin-left: 2px; }
 @media (pointer: coarse) { .step-title { padding: 6px 0; } }
 .why-sheet { max-height: 88dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 .why-body { container-type: inline-size; }

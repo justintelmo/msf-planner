@@ -489,8 +489,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
               {list.map((s, i) => (
                 <li key={i}>
                   <CharName id={s.characterId} />:{' '}
-                  <button type="button" className="step-title" aria-haspopup="dialog" onClick={() => openWhy(s)}>
-                    {s.title} <span className="why-hint" aria-hidden="true">why?</span>
+                  <button type="button" className="step-title" aria-haspopup="dialog" aria-label={`${s.title}: why this step`} onClick={() => openWhy(s)}>
+                    {s.title}
                   </button>
                   {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
