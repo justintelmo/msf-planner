@@ -4,7 +4,7 @@ import type { Snapshot } from '../data/store';
 import { goalReports, loadCatalog, setGoals, setHideDone, unreadEvents, useUnlocks, withLiveEvents, type GoalSourceReport } from '../data/unlocks';
 import { plainName } from '../planner/export';
 import { describeGap } from '../planner/gaps';
-import { isUnlocked, ownedCharacters } from '../planner/requirements';
+import { goalDone, isUnlocked, ownedCharacters } from '../planner/requirements';
 import { saveJson } from '../util/download';
 import GoalPicker from './GoalPicker';
 import { CharName, CharPortrait } from './Details';
@@ -22,7 +22,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
   const catalog = useMemo(() => withLiveEvents(saved, snapshot.events, snapshot.characters), [saved, snapshot.events, snapshot.characters]);
   const unread = useMemo(() => unreadEvents(saved, snapshot.events), [saved, snapshot.events]);
 
-  const doneCount = goals.filter((g) => { const c = byId.get(g); return c && isUnlocked(c); }).length;
+  const doneCount = goals.filter((g) => goalDone(byId.get(g))).length;
   const reports = useMemo(() => goalReports(goals, catalog, roster), [goals, catalog, roster]);
 
   const move = (i: number, d: number) => {
@@ -104,16 +104,16 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
       <GoalPicker roster={roster} goals={goals} catalog={catalog} nameOf={nameOf} onPick={(id) => setGoals([...goals, id])} />
       {doneCount > 0 && (
         <label className="toggle small">
-          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide unlocked goals ({doneCount})
+          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide finished goals, unlocked at 7★ ({doneCount})
         </label>
       )}
       {goals.length === 0 && <p className="muted">No goals yet.</p>}
-      {goals.length > 0 && hideDone && doneCount === goals.length && <p className="muted">Every goal is unlocked. Add another above.</p>}
+      {goals.length > 0 && hideDone && doneCount === goals.length && <p className="muted">Every goal is unlocked at 7★. Add another above.</p>}
 
       {reports.map((r, i) => {
         const c = byId.get(r.characterId);
-        if (hideDone && c && isUnlocked(c)) return null;
-        const n = reports.slice(0, i + 1).filter((x) => { const d = byId.get(x.characterId); return !(hideDone && d && isUnlocked(d)); }).length;
+        if (hideDone && goalDone(c)) return null;
+        const n = reports.slice(0, i + 1).filter((x) => !(hideDone && goalDone(byId.get(x.characterId)))).length;
         const sp = c && shardProgress(c, snapshot.inventory, (snapshot.upgrades ?? SAMPLE_UPGRADES).yellowStarTotalShards);
         const checks = r.sources.flatMap((x) => x.checks);
         const met = checks.filter((ch) => ch.plan.met).length;
@@ -125,7 +125,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
               <span className="goal-title">
                 <CharPortrait id={r.characterId} />
                 <strong>{n}. {nameOf(r.characterId)}</strong>
-                {c && isUnlocked(c) && <span className="pill ready">Unlocked</span>}
+                {c && isUnlocked(c) && <span className="pill ready">{goalDone(c) ? 'Done, 7★' : `Unlocked at ${c.instance?.activeYellow ?? 0}★`}</span>}
               </span>
               {catalog && r.sources.length > 0 ? (
                 <span className="goal-progress muted small">

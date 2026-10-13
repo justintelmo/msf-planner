@@ -1,5 +1,5 @@
 import { charName, strings } from '../i18n';
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type GearTiers } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
@@ -18,7 +18,10 @@ import SourceLadder from './SourceLadder';
 import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
 import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
-import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, useUnlocks, type GoalReport } from '../data/unlocks';
+import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, setStarsOff, useUnlocks, type GoalReport } from '../data/unlocks';
+import { eventStarGoals, MAX_YELLOW } from '../planner/eventStars';
+
+const EVENT_STARS = 'Event-gated stars for your teams';
 import { savePlanned } from '../data/planHistory';
 import { COMMUNITY_SIGNALS } from '../data/communitySignals';
 import StepWhy, { type WhyTarget } from './StepWhy';
@@ -163,7 +166,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const tabMark = useRef<HTMLDivElement>(null);
   const [days, setDays] = useState(() => readJson<number>(localStorage, DAYS_KEY) ?? 7);
 
-  const { catalog: saved, goals: allGoals, hideDone } = useUnlocks();
+  const { catalog: saved, goals: allGoals, hideDone, starsOff } = useUnlocks();
   const catalog = useMemo(() => withLiveEvents(saved, snapshot.events, snapshot.characters), [saved, snapshot.events, snapshot.characters]);
   const goals = useMemo(() => activeGoals(allGoals, owned, hideDone), [allGoals, owned, hideDone]);
   const modeGoals = useModeGoals();
@@ -171,15 +174,33 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => [...goalReports(goals, catalog, owned), ...modeReports(modeGoals, catalog, owned, snapshot.squads ?? {})],
     [goals, catalog, owned, modeGoals, snapshot.squads],
   );
-  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? charName(undefined, id)), [reports, names]);
-  const ranked = useMemo(
-    () => rankCharacters({
+  const nameOfId = useCallback((id: string) => names.get(id) ?? charName(undefined, id), [names]);
+  const rank = useCallback(
+    (rs: GoalReport[]) => rankCharacters({
       owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events,
-      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? charName(undefined, id)),
-      signals: COMMUNITY_SIGNALS,
+      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(rs, nameOfId), signals: COMMUNITY_SIGNALS,
     }),
-    [owned, snapshot, modeOrder, catalog, reports, names],
+    [owned, snapshot, modeOrder, catalog, nameOfId],
   );
+  // Team characters whose stars only come from events get those events as goals of their own.
+  const starGoals = useMemo(
+    () => (catalog ? eventStarGoals(rank(reports), catalog.sources, new Set([...allGoals, ...starsOff])) : []),
+    [rank, reports, catalog, allGoals, starsOff],
+  );
+  const allReports = useMemo(
+    () => [
+      ...reports,
+      ...starGoals.map((g): GoalReport => ({
+        ...goalReports([g.characterId], { ...catalog!, sources: g.sources }, owned)[0],
+        label: `${nameOfId(g.characterId)} to ${MAX_YELLOW}★`,
+        group: EVENT_STARS,
+        note: `At ${g.stars}★, for ${g.teams.slice(0, 2).map((t) => t.label).join('; ')}. Their shards come from ${g.sources.map((x) => x.name).join(', ')}.`,
+      })),
+    ],
+    [reports, starGoals, catalog, owned, nameOfId],
+  );
+  const targets = useMemo(() => goalTargets(allReports, nameOfId), [allReports, nameOfId]);
+  const ranked = useMemo(() => rank(allReports), [rank, allReports]);
   const order = useMemo(() => ranked.map((r) => r.character.info.id), [ranked]);
   const detailIds = useMemo(() => [...new Set([...Object.keys(targets), ...order])].slice(0, DETAIL_LIMIT), [order, targets]);
   const { details, remaining } = useCharacterDetails(detailIds, snapshot.source === 'live');
@@ -247,7 +268,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     [schedule],
   );
   const tabs: [PlanTab, string, number?][] = [
-    ...(reports.length > 0 && catalog ? [['goals', 'Goals', reports.length] as [PlanTab, string, number]] : []),
+    ...(allReports.length > 0 && catalog ? [['goals', 'Goals', allReports.length] as [PlanTab, string, number]] : []),
     ['priority', 'Priority', schedule.steps.length],
     ...(schedule.blocked.length > 0 ? [['farm', 'Farm', schedule.blocked.length] as [PlanTab, string, number]] : []),
     ['characters', 'Characters'],
@@ -270,8 +291,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const withSteps = plan.characters.filter((p) => p.steps.length);
 
   const [hideMet, setHideMet] = useState(() => readJson<boolean>(localStorage, HIDE_MET_KEY) ?? true);
-  const metRaids = reports.filter(isMetRaid).length;
-  const shownReports = hideMet ? reports.filter((r) => !isMetRaid(r)) : reports;
+  const metRaids = allReports.filter(isMetRaid).length;
+  const shownReports = hideMet ? allReports.filter((r) => !isMetRaid(r)) : allReports;
 
   const goalCard = (r: GoalReport) => {
             const checks = r.sources.flatMap((s) => s.checks);
@@ -295,6 +316,12 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     {r.sources.length ? `${met} of ${checks.length} requirements met` : 'no content in the API rewards them right now'}
                   </span>
                 </h3>
+                {r.note && (
+                  <p className="small muted">
+                    {r.note}{' '}
+                    <button className="ghost small" onClick={() => setStarsOff([...starsOff, r.characterId])}>Stop tracking</button>
+                  </p>
+                )}
                 <SourceLadder report={r} nameOf={nameOf} />
                 <ul>
                   {[...gaps].map(([id, g]) => {
@@ -444,6 +471,12 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
             Who to build for each goal and what they still need. Their steps lead the priority list below. “Check in game”
             means the cost uses something the API doesn’t report, like ions.
           </p>
+          {starsOff.length > 0 && (
+            <p className="small muted">
+              Not tracking event stars for {starsOff.map(nameOfId).join(', ')}.{' '}
+              <button className="ghost small" onClick={() => setStarsOff([])}>Track again</button>
+            </p>
+          )}
           {metRaids > 0 && (
             <label className="toggle small">
               <input type="checkbox" checked={hideMet} onChange={(e) => {
@@ -459,7 +492,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                 <summary>
                   <strong>{item.group}</strong>{' '}
                   <span className="muted small">
-                    {item.reports.length} raid{item.reports.length > 1 ? 's' : ''} ·{' '}
+                    {item.reports.length} {item.group === EVENT_STARS ? 'character' : 'raid'}{item.reports.length > 1 ? 's' : ''} ·{' '}
                     {item.reports.reduce((n, r) => n + r.sources.flatMap((x) => x.checks).filter((c) => c.plan.met).length, 0)} of{' '}
                     {item.reports.reduce((n, r) => n + r.sources.flatMap((x) => x.checks).length, 0)} requirements met
                   </span>

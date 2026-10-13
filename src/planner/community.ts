@@ -54,13 +54,14 @@ export function communityReasons(
           weight: backing.length ? BUILD : BUILD_UNBACKED,
           detail: s.claim,
           url,
+          kind: 'community',
         });
       } else if (needs.length) {
-        add(id, { label: `Reddit says don’t over-build ${s.team}, but ${list(needs)} still needs them`, weight: 0, detail: s.claim, url });
+        add(id, { label: `Reddit says don’t over-build ${s.team}, but ${list(needs)} still needs them`, weight: 0, detail: s.claim, url, kind: 'community' });
       } else if (s.stance === 'enough') {
-        add(id, { label: `Reddit: build ${s.team} only as far as content needs`, weight: ENOUGH, detail: s.claim, url });
+        add(id, { label: `Reddit: build ${s.team} only as far as content needs`, weight: ENOUGH, detail: s.claim, url, kind: 'community' });
       } else {
-        add(id, { label: `Reddit: hold upgrades on ${s.team} until the event that scores them${s.until ? ` (checked to ${s.until})` : ''}`, weight: HOLD, detail: s.claim, url });
+        add(id, { label: `Reddit: hold upgrades on ${s.team} until the event that scores them${s.until ? ` (checked to ${s.until})` : ''}`, weight: HOLD, detail: s.claim, url, kind: 'community' });
       }
     }
   }

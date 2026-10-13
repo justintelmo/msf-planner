@@ -14,6 +14,7 @@ import {
 const CATALOG_KEY = 'msf.unlocks.v1';
 const GOALS_KEY = 'msf.goals';
 const HIDE_DONE_KEY = 'msf.goals.hideDone';
+const STARS_OFF_KEY = 'msf.goals.eventStarsOff';
 
 /** Episodic types whose nodes can hand out character shards. */
 export const EPISODIC_TYPES: Record<string, string> = {
@@ -55,6 +56,8 @@ interface State {
   goals: string[];
   /** Hide goals whose character is already unlocked, here and in the Plan. */
   hideDone: boolean;
+  /** Characters whose event-star goal the player turned off. */
+  starsOff: string[];
 }
 
 let state: State = {
@@ -63,6 +66,7 @@ let state: State = {
   // Catch-up targets until goals are saved on the Goals tab.
   goals: readJson<string[]>(localStorage, GOALS_KEY) ?? DEFAULT_GOALS,
   hideDone: readJson<boolean>(localStorage, HIDE_DONE_KEY) ?? true,
+  starsOff: readJson<string[]>(localStorage, STARS_OFF_KEY) ?? [],
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
@@ -83,6 +87,11 @@ export function useUnlocks(): State {
 export function setGoals(goals: string[]) {
   writeJson(localStorage, GOALS_KEY, goals);
   set({ goals });
+}
+
+export function setStarsOff(starsOff: string[]) {
+  writeJson(localStorage, STARS_OFF_KEY, starsOff);
+  set({ starsOff });
 }
 
 export function setHideDone(hideDone: boolean) {
@@ -207,6 +216,8 @@ export interface GoalReport {
   label?: string;
   /** Reports sharing a group (e.g. one raid type) are shown together. */
   group?: string;
+  /** Why the planner added this goal itself, when it did. */
+  note?: string;
   sources: GoalSourceReport[];
 }
 

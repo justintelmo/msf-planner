@@ -84,9 +84,14 @@ export function checkRequirements(roster: OwnedCharacter[], req: Requirements | 
   return { eligible, needed, met: eligible.length >= needed };
 }
 
-/** Goals still in play: unlocked characters drop out when hideDone is on. */
+/** A goal is done once its character is unlocked at max yellow stars; until then their content still gives shards. */
+export function goalDone(c: OwnedCharacter | undefined): boolean {
+  return !!c && isUnlocked(c) && (c.instance?.activeYellow ?? 0) >= 7;
+}
+
+/** Goals still in play: finished characters drop out when hideDone is on. */
 export function activeGoals(goals: string[], roster: OwnedCharacter[], hideDone: boolean): string[] {
   if (!hideDone) return goals;
-  const done = new Set(roster.filter(isUnlocked).map((c) => c.info.id));
+  const done = new Set(roster.filter(goalDone).map((c) => c.info.id));
   return goals.filter((g) => !done.has(g));
 }

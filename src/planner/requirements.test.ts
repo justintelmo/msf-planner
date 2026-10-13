@@ -51,9 +51,11 @@ describe('activeGoals', () => {
     { info: { id: 'Xavier' }, instance: { id: 'Xavier', activeYellow: 0 } },
     { info: { id: 'BlueMarvel' } },
   ];
-  it('drops unlocked characters only when hiding finished goals', () => {
+  it('drops characters unlocked at 7★ only when hiding finished goals', () => {
     const goals = ['Odin', 'BlueMarvel', 'Xavier'];
-    expect(activeGoals(goals, roster, true)).toEqual(['BlueMarvel', 'Xavier']);
+    expect(activeGoals(goals, roster, true)).toEqual(['Odin', 'BlueMarvel', 'Xavier']);
+    const maxed = roster.map((c) => (c.info.id === 'Odin' ? { ...c, instance: { ...c.instance!, activeYellow: 7 } } : c));
+    expect(activeGoals(goals, maxed, true)).toEqual(['BlueMarvel', 'Xavier']);
     expect(activeGoals(goals, roster, false)).toEqual(goals);
   });
 });

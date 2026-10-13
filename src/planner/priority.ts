@@ -39,6 +39,8 @@ export interface Reason {
   detail?: string;
   /** Where it comes from. */
   url?: string;
+  /** What kind of use it records; squads, content teams and backed community picks are teams. */
+  kind?: 'squad' | 'content' | 'event' | 'goal' | 'fits' | 'community';
 }
 
 export interface Ranked {
@@ -102,7 +104,7 @@ function eventReasons(c: OwnedCharacter, events: EventInfo[], weights: Record<st
     const gap = traitFilter && shortOf(c, traitFilter);
     // Blitz events follow the player's Blitz weight; other events count as progression.
     const weight = e.blitz ? (weights.blitz ?? 0) : EVENT_WEIGHT;
-    if (weight) reasons.push({ label: `${e.name ?? e.type}${gap ? `: needs ${gap}` : ''}`, weight });
+    if (weight) reasons.push({ label: `${e.name ?? e.type}${gap ? `: needs ${gap}` : ''}`, weight, kind: 'event' });
   }
   return reasons;
 }
@@ -209,7 +211,7 @@ export function rankCharacters(input: RankInput): Ranked[] {
       if (!weight) return;
       const label = `${MODE_LABELS[mode] ?? mode} squad: ${name(ids)}${share < 1 ? ` (${Math.round((power[i] / top) * 100)}% of your strongest)` : ''}`;
       ids.forEach((id) => {
-        if ((best.get(id)?.weight ?? 0) < weight) best.set(id, { label, weight });
+        if ((best.get(id)?.weight ?? 0) < weight) best.set(id, { label, weight, kind: 'squad' });
       });
     });
     best.forEach((r, id) => {
@@ -219,7 +221,7 @@ export function rankCharacters(input: RankInput): Ranked[] {
   }
   for (const team of input.contentTeams) {
     resolveTeam(team, input.owned).found.forEach((c) =>
-      add(c.info.id, { label: `${team.content}: ${team.team}`, weight: CONTENT_WEIGHT }),
+      add(c.info.id, { label: `${team.content}: ${team.team}`, weight: CONTENT_WEIGHT, kind: 'content' }),
     );
   }
   for (const c of input.owned.filter(isUnlocked)) {
@@ -227,7 +229,7 @@ export function rankCharacters(input: RankInput): Ranked[] {
   }
 
   for (const [id, goals] of Object.entries(input.goalPicks ?? {})) {
-    goals.forEach((g) => add(id, { label: `Needed for ${g}`, weight: GOAL_WEIGHT }));
+    goals.forEach((g) => add(id, { label: `Needed for ${g}`, weight: GOAL_WEIGHT, kind: 'goal' }));
   }
   // Characters whose traits fit many unlock events and Dark Dimensions keep paying off.
   if (input.contentFilters?.length) {
@@ -238,7 +240,7 @@ export function rankCharacters(input: RankInput): Ranked[] {
     for (const c of input.owned) {
       const fits = traited.filter((s) => s.filters.some((f) => matchesFilter(c, f))).length;
       if (fits >= 3) {
-        add(c.info.id, { label: `Fits ${fits} unlock events and Dark Dimensions`, weight: Math.min(VERSATILITY_CAP, fits * VERSATILITY_STEP) });
+        add(c.info.id, { label: `Fits ${fits} unlock events and Dark Dimensions`, weight: Math.min(VERSATILITY_CAP, fits * VERSATILITY_STEP), kind: 'fits' });
       }
     }
   }
