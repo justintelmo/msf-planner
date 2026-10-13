@@ -1,3 +1,4 @@
+import { charName } from '../i18n';
 import { useMemo, useState } from 'react';
 import { msfApi } from '../api/client';
 import type { EventInfo, Requirements } from '../api/types';
@@ -71,7 +72,7 @@ export default function Events({ snapshot }: { snapshot: Snapshot }) {
               <p className={check.met ? 'ok' : 'warn'}>
                 {check.met ? '✓' : '✗'} {check.eligible.length} eligible of {check.needed} needed
                 {check.eligible.length > 0 &&
-                  `: ${check.eligible.slice(0, 5).map((c) => c.info.name ?? c.info.id).join(', ')}`}
+                  `: ${check.eligible.slice(0, 5).map((c) => charName(c.info)).join(', ')}`}
               </p>
             )}
             {progress && (

@@ -1,3 +1,4 @@
+import { charName } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { msfApi } from '../api/client';
 import type { CombatUnit, CombatWave, DarkDimension as DD, NodeInfo, Requirements } from '../api/types';
@@ -49,7 +50,7 @@ function waveTrigger(w: CombatWave, i: number): string {
 }
 
 function Unit({ u, rank, target, keep }: { u: CombatUnit; rank?: number; target?: KillTarget; keep?: boolean }) {
-  const name = plainName(u.info?.name ?? u.id);
+  const name = charName(u.info, u.id);
   const fx = u.nodeEffects;
   // Node overrides that let an enemy fire abilities far more often than normal.
   const cheats = [
@@ -262,7 +263,7 @@ export default function DarkDimension({ snapshot }: { snapshot: Snapshot }) {
                     </p>
                     {check.eligible.length > 0 && (
                       <p className="muted small">
-                        Strongest: {check.eligible.slice(0, 10).map((c) => plainName(c.info.name ?? c.info.id)).join(', ')}
+                        Strongest: {check.eligible.slice(0, 10).map((c) => charName(c.info)).join(', ')}
                       </p>
                     )}
                   </div>

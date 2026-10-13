@@ -1,3 +1,4 @@
+import { charName } from '../i18n';
 import { useMemo } from 'react';
 import type { Snapshot } from '../data/store';
 import { goalReports, loadCatalog, setGoals, setHideDone, unreadEvents, useUnlocks, withLiveEvents, type GoalSourceReport } from '../data/unlocks';
@@ -16,7 +17,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
   const live = snapshot.source === 'live';
   const roster = useMemo(() => ownedCharacters(snapshot), [snapshot]);
   const byId = useMemo(() => new Map(roster.map((c) => [c.info.id, c])), [roster]);
-  const nameOf = (id: string) => plainName(byId.get(id)?.info.name ?? id);
+  const nameOf = (id: string) => charName(byId.get(id)?.info, id);
   const { catalog: saved, progress, goals, hideDone } = useUnlocks();
   const catalog = useMemo(() => withLiveEvents(saved, snapshot.events, snapshot.characters), [saved, snapshot.events, snapshot.characters]);
   const unread = useMemo(() => unreadEvents(saved, snapshot.events), [saved, snapshot.events]);

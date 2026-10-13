@@ -1,8 +1,9 @@
+import { charName, traitName } from '../i18n';
 import { useMemo, useState } from 'react';
 import { idOf } from '../api/types';
 import type { Snapshot } from '../data/store';
 import { msfApi } from '../api/client';
-import { plainName, rosterExport } from '../planner/export';
+import { rosterExport } from '../planner/export';
 import { useDetails } from './Details';
 import { saveJson } from '../util/download';
 import { isUnlocked, ownedCharacters, type OwnedCharacter } from '../planner/requirements';
@@ -135,17 +136,17 @@ export default function Roster({ snapshot }: { snapshot: Snapshot }) {
             {rows.map((c) => (
               <tr key={c.info.id} className={isUnlocked(c) ? '' : 'locked'}>
                 <td className="pic">
-                  <button type="button" aria-label={`About ${plainName(c.info.name ?? c.info.id)}`} onClick={() => details?.open({ kind: 'character', id: c.info.id })}>
+                  <button type="button" aria-label={`About ${charName(c.info)}`} onClick={() => details?.open({ kind: 'character', id: c.info.id })}>
                     {c.info.portrait ? <img src={c.info.portrait} alt="" loading="lazy" /> : <span className="ph" />}
                   </button>
                 </td>
-                <td className="name">{plainName(c.info.name ?? c.info.id)}</td>
+                <td className="name">{charName(c.info)}</td>
                 <td className="num">{isUnlocked(c) ? (c.instance?.power ?? 0).toLocaleString() : 'Locked'}</td>
                 <td className="num">{c.instance?.activeYellow ?? 0}</td>
                 <td className="num">{redLabel(c.instance?.activeRed)}</td>
                 <td className="num">{c.instance?.gearTier ?? '–'}</td>
                 <td className="num">{c.instance?.level ?? '–'}</td>
-                <td className="traits">{(c.info.traits ?? []).map((t) => idOf(t)).join(', ')}</td>
+                <td className="traits">{(c.info.traits ?? []).map((t) => traitName(idOf(t) ?? '')).join(', ')}</td>
               </tr>
             ))}
           </tbody>

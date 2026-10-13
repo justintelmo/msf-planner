@@ -1,3 +1,4 @@
+import { strings } from '../i18n';
 import { CharName } from './Details';
 import { useEffect, useMemo, useState } from 'react';
 import { readJson, writeJson } from '../auth/storage';
@@ -12,9 +13,9 @@ import { reviewSync, type Verdict } from '../planner/review';
 const SEEN_KEY = 'msf.review.seen';
 const SHOWN = 8;
 const VERDICT: Record<Verdict, { label: string; cls: string }> = {
-  good: { label: 'Good', cls: 'ready' },
-  ok: { label: 'Fine', cls: '' },
-  questionable: { label: 'Rethink', cls: 'short' },
+  good: { label: strings.verdict.good, cls: 'ready' },
+  ok: { label: strings.verdict.ok, cls: '' },
+  questionable: { label: strings.verdict.questionable, cls: 'short' },
 };
 const MOOD_CLASS = { great: 'ok', good: 'ok', mixed: 'warn', 'off-plan': 'warn', none: 'muted' } as const;
 

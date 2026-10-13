@@ -1,3 +1,4 @@
+import { charName } from '../i18n';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { idOf } from '../api/types';
 import { msfApi } from '../api/client';
@@ -50,7 +51,7 @@ export function DetailProvider({ snapshot, children }: { snapshot: Snapshot | nu
     return m;
   }, [snapshot]);
   const api = useMemo<DetailApi>(() => {
-    const nameOf = (id: string) => plainName(chars.get(id)?.name ?? id);
+    const nameOf = (id: string) => charName(chars.get(id), id);
     return {
       open: (t) => {
         setTarget(t);

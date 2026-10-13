@@ -1,3 +1,4 @@
+import { EN as strings } from '../i18n/en';
 import type { AbilitySlot, CharacterInstance } from '../api/types';
 import type { AbilityKit } from './modeTags';
 
@@ -14,14 +15,7 @@ export type KitTag = 'maxHealth' | 'lockdown' | 'tempo' | 'drain' | 'sustain' | 
 
 export const KIT_TAGS: KitTag[] = ['maxHealth', 'lockdown', 'tempo', 'drain', 'sustain', 'piercing'];
 
-export const KIT_LABELS: Record<KitTag, string> = {
-  maxHealth: '% Max Health',
-  lockdown: 'Stun/Block',
-  tempo: 'Speed/Energy',
-  drain: 'Drain',
-  sustain: 'Sustain',
-  piercing: 'Piercing',
-};
+export const KIT_LABELS: Record<KitTag, string> = strings.kit;
 
 /** A tag and the ability level that first gives it. */
 export interface KitTagHit {

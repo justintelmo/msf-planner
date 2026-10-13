@@ -1,3 +1,4 @@
+import { EN as strings } from '../i18n/en';
 import {
   ABILITY_SLOTS,
   idOf,
@@ -118,9 +119,7 @@ export function goldOf(cost: Cost): number {
 const levels = (table: Record<string, unknown> | undefined) =>
   Object.keys(table ?? {}).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
 
-const ABILITY_NAMES: Record<AbilitySlot, string> = {
-  basic: 'Basic', special: 'Special', ultimate: 'Ultimate', passive: 'Passive',
-};
+const ABILITY_NAMES: Record<AbilitySlot, string> = strings.ability;
 const UNIQUE_MAT = 'ABILITY_MATERIAL_UNIQUE_ABILITY_MAT';
 
 /** Level 8 abilities use a character-specific material, e.g. ..._UNIQUE_ABILITY_MAT_NOVA_SPECIAL. */

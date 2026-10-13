@@ -1,3 +1,4 @@
+import { charName, humanize, strings } from '../i18n';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { msfApi } from '../api/client';
 import { idOf, type GearTiers } from '../api/types';
@@ -6,7 +7,6 @@ import { CONTENT_TEAMS } from '../data/contentTeams';
 import { SAMPLE_UPGRADES } from '../data/sample';
 import type { Snapshot } from '../data/store';
 import { buildPlan, modeEffectLabel, sumCost, type Step } from '../planner/build';
-import { plainName } from '../planner/export';
 import { compact, itemLabel } from '../planner/items';
 import { extractModeTags, type ModeTag } from '../planner/modeTags';
 import { isMetRaid, modeReports, useModeGoals } from '../data/modeGoals';
@@ -38,7 +38,7 @@ type PlanTab = 'goals' | 'priority' | 'farm' | 'characters';
 const DETAIL_LIMIT = 60;
 const SHOWN = 20;
 
-const STATUS_LABEL: Record<Step['status'], string> = { ready: 'Do now', short: 'Short', unchecked: 'Check in game' };
+const STATUS_LABEL: Record<Step['status'], string> = strings.stepStatus;
 
 interface Detail {
   gearTiers: GearTiers;
@@ -130,7 +130,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const names = useMemo(() => {
     const m = new Map<string, string>();
     owned.forEach((c) => {
-      const name = plainName(c.info.name ?? c.info.id);
+      const name = charName(c.info);
       m.set(c.info.id, name);
       m.set(c.info.id.toUpperCase(), name);
     });
@@ -139,7 +139,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const stores = useDeferredValue(useStores());
   const label = (id: string) =>
     stores.currencies.find((c) => currencyItem(c.id) === id)?.name ?? itemLabel(id, (key) => names.get(key));
-  const nameOf = (id: string) => names.get(id) ?? id;
+  const nameOf = (id: string) => names.get(id) ?? humanize(id);
 
   const [modeOrder, setModeOrder] = useState<string[]>(() => withAllModes(readJson(localStorage, MODES_KEY) ?? DEFAULT_MODE_ORDER));
   const moveUp = (i: number) => {
@@ -170,11 +170,11 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     () => [...goalReports(goals, catalog, owned), ...modeReports(modeGoals, catalog, owned, snapshot.squads ?? {})],
     [goals, catalog, owned, modeGoals, snapshot.squads],
   );
-  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? id), [reports, names]);
+  const targets = useMemo(() => goalTargets(reports, (id) => names.get(id) ?? humanize(id)), [reports, names]);
   const ranked = useMemo(
     () => rankCharacters({
       owned, squads: snapshot.squads ?? {}, modeOrder, contentTeams: CONTENT_TEAMS, events: snapshot.events,
-      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? id),
+      contentFilters: catalogFilters(catalog), goalPicks: goalPicks(reports, (id) => names.get(id) ?? humanize(id)),
     }),
     [owned, snapshot, modeOrder, catalog, reports, names],
   );

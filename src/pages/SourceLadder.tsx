@@ -1,3 +1,4 @@
+import { traitName } from '../i18n';
 import type { Trait } from '../api/types';
 import type { GoalReport, GoalSourceReport } from '../data/unlocks';
 import { plainName } from '../planner/export';
@@ -56,7 +57,7 @@ export function requirementText(s: GoalSourceReport, nameOf: (id: string) => str
     f?.activeRed && `${f.activeRed} red stars`,
     f?.iso8ClassLevel && `ISO-8 ${f.iso8ClassLevel}`,
   ].filter(Boolean);
-  const t = (x: Trait) => (typeof x === 'string' ? x : x.name ?? x.id);
+  const t = (x: Trait) => (typeof x === 'string' ? traitName(x) : x.name ?? traitName(x.id));
   const traits = [...(f?.allTraits ?? []).map(t), ...(f?.anyTraits?.length ? [f.anyTraits.map(t).join(' or ')] : [])].join(' ');
   const who = `${req.minCharacters ?? 5} ${traits ? `${traits} ` : ''}characters${bits.length ? ` at ${bits.join(', ')}` : ''}`;
   const named = req.specificCharacters?.map(nameOf).join(', ');

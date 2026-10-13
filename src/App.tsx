@@ -1,3 +1,4 @@
+import { useLoadTraitNames, useTraitNames } from './i18n';
 import { Activity, lazy, Suspense, useState, type ReactNode } from 'react';
 import { plainName } from './planner/export';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -29,6 +30,9 @@ const TABS: { to: string; label: string; short?: string }[] = [
 export default function App() {
   useAutoSync();
   const { mode, snapshot, loading, error } = useStore();
+  // Trait names from the game; reading them here re-renders the pages that show them.
+  useLoadTraitNames(snapshot?.source === 'live');
+  useTraitNames();
   const { pathname } = useLocation();
 
   if (!mode) {

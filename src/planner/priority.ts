@@ -1,11 +1,10 @@
+import { EN as strings } from '../i18n/en';
+import { charName, traitName } from '../i18n/names';
 import type { CharacterFilter, EventInfo, Squads } from '../api/types';
 import type { ContentTeam } from '../data/contentTeams';
 import { isUnlocked, matchesFilter, type OwnedCharacter } from './requirements';
 
-export const MODE_LABELS: Record<string, string> = {
-  raids: 'Raids', war: 'War', crucible: 'Crucible', blitz: 'Blitz', arena: 'Arena', tower: 'Tower',
-  battleworld: 'Battleworld', roster: 'Roster',
-};
+export const MODE_LABELS: Record<string, string> = strings.mode;
 export const DEFAULT_MODE_ORDER = ['raids', 'battleworld', 'war', 'crucible', 'blitz'];
 
 /** Adds modes a saved order predates, each after the mode it follows by default. */
@@ -131,9 +130,38 @@ export function resolveTeam(team: ContentTeam, owned: OwnedCharacter[]): { found
   const found = [...new Set([...named.flatMap((n) => (n.c ? [n.c] : [])), ...byTrait])];
   const missing = [
     ...named.filter((n) => !n.c).map((n) => n.key),
-    ...(team.traits ?? []).filter((t) => !owned.some((c) => hasTrait(c, t))).map((t) => `${t} (trait)`),
+    ...(team.traits ?? []).filter((t) => !owned.some((c) => hasTrait(c, t))).map((t) => `${traitName(t)} (trait)`),
   ];
   return { found, missing };
+}
+
+/** Traits this many characters share are categories, not teams. */
+const CATEGORY_SIZE = 40;
+/** Alignment, origin, location and role traits, which never name a team. */
+const CATEGORIES = new Set([
+  'Hero', 'Villain', 'Bio', 'Mystic', 'Mutant', 'Skill', 'Tech', 'City', 'Global', 'Cosmic',
+  'Blaster', 'Brawler', 'Controller', 'Protector', 'Support', 'Healer', 'Legendary', 'Minion',
+]);
+
+/**
+ * Names a saved squad: the rarest trait at least three members share (a team like "Annihilators"),
+ * else its first three members.
+ */
+export function squadNamer(owned: OwnedCharacter[]): (ids: string[]) => string {
+  const byId = new Map(owned.map((c) => [c.info.id, c]));
+  const freq = new Map<string, number>();
+  const traitsOf = (c: OwnedCharacter | undefined) => (c?.info.traits ?? []).map((t) => (typeof t === 'string' ? t : t.id));
+  owned.forEach((c) => traitsOf(c).forEach((t) => freq.set(t, (freq.get(t) ?? 0) + 1)));
+  return (ids) => {
+    const count = new Map<string, number>();
+    ids.forEach((id) => traitsOf(byId.get(id)).forEach((t) => count.set(t, (count.get(t) ?? 0) + 1)));
+    const team = [...count]
+      .filter(([t, n]) => n >= 3 && !CATEGORIES.has(t) && (freq.get(t) ?? 0) <= CATEGORY_SIZE)
+      .sort((a, b) => (freq.get(a[0]) ?? 0) - (freq.get(b[0]) ?? 0) || b[1] - a[1])[0]?.[0];
+    if (team) return traitName(team);
+    const names = ids.slice(0, 3).map((id) => charName(byId.get(id)?.info, id));
+    return `${names.join(', ')}${ids.length > 3 ? ' and more' : ''}`;
+  };
 }
 
 /**
@@ -147,9 +175,19 @@ export function rankCharacters(input: RankInput): Ranked[] {
   const reasons = new Map<string, Reason[]>();
   const add = (id: string, r: Reason) => reasons.set(id, [...(reasons.get(id) ?? []), r]);
 
+  const name = squadNamer(input.owned);
   for (const mode of input.modeOrder) {
-    const ids = new Set((input.squads[mode] ?? []).flat().filter(Boolean));
-    ids.forEach((id) => add(id, { label: `${MODE_LABELS[mode] ?? mode} squad`, weight: weights[mode] }));
+    const seen = new Set<string>();
+    (input.squads[mode] ?? []).forEach((squad) => {
+      const ids = squad.filter(Boolean);
+      const label = `${MODE_LABELS[mode] ?? mode} squad: ${name(ids)}`;
+      ids.forEach((id) => {
+        // A character saved on two squads of one mode counts once, under the first.
+        if (seen.has(id)) return;
+        seen.add(id);
+        add(id, { label, weight: weights[mode] });
+      });
+    });
   }
   for (const team of input.contentTeams) {
     resolveTeam(team, input.owned).found.forEach((c) =>

@@ -417,6 +417,10 @@ export const msfApi = {
       itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'full', pieceInfo: 'none',
     })).data;
   },
+  /** Every trait with its English name. */
+  async traits(): Promise<{ id: string; name?: string }[]> {
+    return (await getPaged<{ id: string; name?: string }>('/game/v1/traits', { lang: 'en' })).data;
+  },
   async characters(): Promise<CharacterInfo[]> {
     const { data, meta } = await getPaged<CharacterInfo>('/game/v1/characters', {
       status: 'playable',

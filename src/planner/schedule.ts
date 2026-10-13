@@ -1,3 +1,4 @@
+import { EN as strings } from '../i18n/en';
 import {
   ABILITY_SLOTS,
   idOf,
@@ -187,7 +188,7 @@ interface Option {
   apply: (cur: Cursor) => void;
 }
 
-const ABILITY_NAMES: Record<AbilitySlot, string> = { basic: 'Basic', special: 'Special', ultimate: 'Ultimate', passive: 'Passive' };
+const ABILITY_NAMES: Record<AbilitySlot, string> = strings.ability;
 const ABILITY_VALUE: Record<AbilitySlot, number> = { ultimate: 4, special: 4, passive: 4, basic: 2 };
 const UNIQUE_MAT = 'ABILITY_MATERIAL_UNIQUE_ABILITY_MAT';
 const ION_PREFIX = 'ISO8-TIER-';

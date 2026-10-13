@@ -1,3 +1,4 @@
+import { EN as strings } from '../i18n/en';
 import { ABILITY_SLOTS, type CharacterFilter, type CharacterInstance, type EventInfo } from '../api/types';
 import type { PlannedStep } from '../data/planHistory';
 import type { SyncPrint } from '../data/syncHistory';
@@ -64,7 +65,7 @@ const loose = (f: CharacterFilter): CharacterFilter => {
 /** "For Odin" → "for Odin", to sit mid-sentence. */
 const lowerFor = (why: string) => why.replace(/^For /, 'for ');
 
-const ABILITY_NAMES = { basic: 'Basic', special: 'Special', ultimate: 'Ultimate', passive: 'Passive' } as const;
+const ABILITY_NAMES = strings.ability;
 
 /** What changed on one character, with a rough effort score (gear and stars weigh most). */
 function diff(a: CharacterInstance | undefined, b: CharacterInstance): { changes: string[]; effort: number; kinds: Set<StepKind> } {
