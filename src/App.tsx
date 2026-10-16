@@ -69,7 +69,7 @@ export default function App() {
           {snapshot && (
             <span className="muted who" title={`Synced ${new Date(snapshot.syncedAt).toLocaleString()}`}>
               {plainName(snapshot.card.name)}
-              {snapshot.source === 'demo' && ' (demo data)'} · synced {new Date(snapshot.syncedAt).toLocaleTimeString()}
+              {snapshot.source === 'demo' && ' (demo data)'} · synced {syncedLabel(snapshot.syncedAt)}
             </span>
           )}
           <button onClick={() => void sync()} disabled={loading}>
@@ -130,4 +130,14 @@ function KeepAlive({ path, pathname, children }: { path: string; pathname: strin
       </ErrorBoundary>
     </Activity>
   );
+}
+
+/** "today 11:49 PM", "yesterday 9:02 AM" or "Oct 12, 9:02 AM". */
+function syncedLabel(at: number): string {
+  const d = new Date(at);
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(at).setHours(0, 0, 0, 0)) / 864e5);
+  if (days === 0) return `today ${time}`;
+  if (days === 1) return `yesterday ${time}`;
+  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 }

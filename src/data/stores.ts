@@ -12,14 +12,19 @@ export interface StoreCurrency {
   perDay?: number;
 }
 
-/** Character shards a store sells for one of those currencies. */
+/** What a store sells for a character: shards, or red stars (one promotion each). */
+export type OfferKind = 'shards' | 'redStar';
+
+/** Character shards or red stars a store sells for one of those currencies. */
 export interface ShardOffer {
   id: string;
   characterId: string;
   currencyId: string;
+  /** Shards when omitted, from offers saved before red stars. */
+  kind?: OfferKind;
   /** Currency per purchase. */
   price: number;
-  /** Shards per purchase. */
+  /** Shards (or red stars) per purchase. */
   shards: number;
   /** Purchases allowed per day, if the store limits it. */
   perDay?: number;

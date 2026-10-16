@@ -8,6 +8,8 @@ export function itemLabel(id: string, characterName: (id: string) => string | un
   if (id === GOLD) return 'gold';
   const shard = /^SHARD_(.+)$/.exec(id);
   if (shard) return `${characterName(shard[1]) ?? titleCase(shard[1])} shards`;
+  const red = /^STORE_RED_STAR_(.+)$/.exec(id);
+  if (red) return `${characterName(red[1]) ?? titleCase(red[1])} red star`;
   const ability = /^ABILITY_MATERIAL_(\w+?)_ABILITY_MAT$/.exec(id);
   if (ability) return `${TIER[ability[1]] ?? ability[1]} ability mats`;
   const unique = /^ABILITY_MATERIAL_UNIQUE_ABILITY_MAT_(.+)$/.exec(id);

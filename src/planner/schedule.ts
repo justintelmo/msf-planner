@@ -14,6 +14,7 @@ import type { Target } from './gaps';
 import type { ModeTag } from './modeTags';
 import { crystalPlan, crystalsOf, CRYSTAL_SLOTS, type Crystals } from './iso';
 import { isUnlocked, type OwnedCharacter } from './requirements';
+import { redStarItem } from './stores';
 
 /** Gear piece id → what it takes to craft one (sub-pieces and gold). */
 export type Recipes = Record<string, Cost>;
@@ -36,6 +37,8 @@ export interface ScheduleInput {
   /** How many days of income to plan. */
   days?: number;
   maxSteps?: number;
+  /** Characters a store sells red stars for (bought as STORE_RED_STAR_ items through `recipes`). */
+  redStars?: Set<string>;
 }
 
 export interface ScheduledStep extends Step {
@@ -164,6 +167,8 @@ interface Cursor {
   c: OwnedCharacter;
   level: number;
   yellow: number;
+  /** Active red stars, not counting diamonds. */
+  red: number;
   gearTier: number;
   gearSlots: boolean[];
   abilities: Record<AbilitySlot, number>;
@@ -193,7 +198,7 @@ const ABILITY_VALUE: Record<AbilitySlot, number> = { ultimate: 4, special: 4, pa
 const UNIQUE_MAT = 'ABILITY_MATERIAL_UNIQUE_ABILITY_MAT';
 const ION_PREFIX = 'ISO8-TIER-';
 
-const VALUE = { gear: 10, stars: 8, unlock: 12, iso: 4, level: 2, levelUnlocksAbility: 4 };
+const VALUE = { gear: 10, stars: 8, redStar: 6, unlock: 12, iso: 4, level: 2, levelUnlocksAbility: 4 };
 /** Goal threshold steps outrank everything else, matching the agreed catch-up strategy. */
 /** Goal steps count this many times over; squared like the priority weight, so goals keep their lead. */
 export const GOAL_BOOST = 9;
@@ -267,12 +272,17 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
     const opens = ABILITY_SLOTS.filter((s) => (reqs[s]?.[cur.abilities[s] + 1] ?? Infinity) <= to && (reqs[s]?.[cur.abilities[s] + 1] ?? 0) > cur.level);
     const cost = levelCost(upgrades, (i) => stock.has(i), cur.level, to);
     const goalLevel = input.targets?.[id]?.target.level;
+    // Abilities at 0 are still locked; the game opens them as the character levels, and the data doesn't say when.
+    const locked = ABILITY_SLOTS.filter((s) => cur.abilities[s] === 0);
     // Without the XP tables, only suggest levels that open an ability level or meet a goal.
-    if (cost || opens.length || (goalLevel && cur.level < goalLevel)) {
+    if (cost || opens.length || locked.length || (goalLevel && cur.level < goalLevel)) {
       out.push({
         kind: 'level', title: `Level ${cur.level} → ${to}`, cost: cost ?? [], goalField: 'level',
-        value: opens.length ? VALUE.levelUnlocksAbility : VALUE.level,
-        detail: opens.length ? `Opens the next ${opens.map((s) => ABILITY_NAMES[s]).join(', ')} level.` : undefined,
+        value: opens.length || locked.length ? VALUE.levelUnlocksAbility : VALUE.level,
+        detail: [
+          opens.length ? `Opens the next ${opens.map((s) => ABILITY_NAMES[s]).join(', ')} level.` : '',
+          locked.length ? `${locked.map((s) => ABILITY_NAMES[s]).join(' and ')} ${locked.length > 1 ? 'are' : 'is'} still locked; levelling up opens ${locked.length > 1 ? 'them' : 'it'}.` : '',
+        ].filter(Boolean).join(' ') || undefined,
         unchecked: cost ? undefined : 'XP tables haven’t loaded; press Sync.',
         apply: (x) => (x.level = to),
       });
@@ -284,7 +294,8 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
   for (const slot of ABILITY_SLOTS) {
     const next = cur.abilities[slot] + 1;
     let cost = upgrades.abilityUpgradeCosts[slot]?.[next];
-    if (!cost || (reqs[slot]?.[next] ?? 0) > cur.level) continue;
+    // A locked ability (at 0) can't be bought; it opens by levelling.
+    if (!cost || cur.abilities[slot] === 0 || (reqs[slot]?.[next] ?? 0) > cur.level) continue;
     if (cost.some((x) => x.item === UNIQUE_MAT)) {
       const mat = uniqueMat(stock, input.inventory, id, slot);
       if (!mat) continue;
@@ -309,6 +320,16 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
       kind: 'stars', title: `Promote ${cur.yellow}★ → ${nextStar}★`, value: VALUE.stars, goalField: 'activeYellow',
       cost: [{ item: shard, quantity: shardTotals[nextStar] - (shardTotals[cur.yellow] ?? 0) }, ...(gold > 0 ? [{ item: GOLD, quantity: gold }] : [])],
       apply: (x) => (x.yellow = nextStar),
+    });
+  }
+
+  // A store red star, when a store sells them; it only counts once the yellow stars match.
+  if (input.redStars?.has(id) && cur.red < 7 && cur.red < cur.yellow) {
+    out.push({
+      kind: 'stars', title: `Red star ${cur.red} → ${cur.red + 1}`, value: VALUE.redStar, goalField: 'activeRed',
+      cost: [{ item: redStarItem(id), quantity: 1 }],
+      detail: 'Bought from the store you entered. Red stars you hold but haven’t activated aren’t in the game data.',
+      apply: (x) => (x.red += 1),
     });
   }
 
@@ -370,6 +391,7 @@ function cursorOf(c: OwnedCharacter): Cursor {
     c,
     level: i.level ?? 1,
     yellow: isUnlocked(c) ? (i.activeYellow ?? 0) : 0,
+    red: Math.min(7, i.activeRed ?? 0),
     gearTier: i.gearTier ?? 1,
     gearSlots: [...(i.gearSlots ?? [])],
     abilities: { basic: i.basic ?? 1, special: i.special ?? 1, ultimate: i.ultimate ?? 1, passive: i.passive ?? 1 },
@@ -381,7 +403,7 @@ function cursorOf(c: OwnedCharacter): Cursor {
 }
 
 const current = (cur: Cursor, field: keyof Target): number =>
-  field === 'level' ? cur.level : field === 'activeYellow' ? cur.yellow : field === 'gearTier' ? cur.gearTier : field === 'iso8ClassLevel' ? cur.isoLevel : 0;
+  field === 'level' ? cur.level : field === 'activeYellow' ? cur.yellow : field === 'activeRed' ? cur.red : field === 'gearTier' ? cur.gearTier : field === 'iso8ClassLevel' ? cur.isoLevel : 0;
 
 /**
  * One ordered list of upgrades across the roster. Each round takes the step with the

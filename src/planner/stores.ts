@@ -4,6 +4,14 @@ import type { ShardOffer, Stores } from '../data/stores';
 /** Inventory id for a typed-in store currency. */
 export const currencyItem = (id: string) => `STORE_CURRENCY_${id}`;
 
+/** Inventory id for a red star bought from a store; one promotes the character one red star. */
+export const redStarItem = (characterId: string) => `STORE_RED_STAR_${characterId}`;
+
+/** Characters a store sells red stars for. */
+export function redStarOffers(stores: Stores): Set<string> {
+  return new Set(stores.offers.filter((o) => o.kind === 'redStar' && o.price > 0 && o.shards > 0).map((o) => o.characterId));
+}
+
 /** The shard item a character's stars use. */
 export const shardOf = (info: CharacterInfo) => idOf(info.starItems?.[0]) ?? `SHARD_${info.id.toUpperCase()}`;
 
@@ -13,19 +21,19 @@ export function storeInventory(stores: Stores): ItemQuantity[] {
 }
 
 /**
- * Shards as something that can be "crafted" from store currency: one shard costs price ÷ shards
+ * Shards and red stars as something "crafted" from store currency: one costs price ÷ amount
  * of the currency, using the cheapest offer per character. The planner then buys shards with
  * currency on hand when a star step is short.
  */
 export function storeRecipes(stores: Stores, characters: CharacterInfo[]): Record<string, Cost> {
   const byId = new Map(characters.map((c) => [c.id, c]));
+  // Cheapest offer per item: a character's shard, or their store red star.
   const best = new Map<string, ShardOffer>();
   for (const o of stores.offers) {
     if (!(o.price > 0 && o.shards > 0) || !byId.has(o.characterId)) continue;
-    const prev = best.get(o.characterId);
-    if (!prev || o.price / o.shards < prev.price / prev.shards) best.set(o.characterId, o);
+    const item = o.kind === 'redStar' ? redStarItem(o.characterId) : shardOf(byId.get(o.characterId)!);
+    const prev = best.get(item);
+    if (!prev || o.price / o.shards < prev.price / prev.shards) best.set(item, o);
   }
-  return Object.fromEntries(
-    [...best].map(([cid, o]) => [shardOf(byId.get(cid)!), [{ item: currencyItem(o.currencyId), quantity: o.price / o.shards }]]),
-  );
+  return Object.fromEntries([...best].map(([item, o]) => [item, [{ item: currencyItem(o.currencyId), quantity: o.price / o.shards }]]));
 }

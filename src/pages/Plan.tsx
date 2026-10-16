@@ -17,7 +17,7 @@ import StoresPanel from './StoresPanel';
 import SourceLadder from './SourceLadder';
 import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
-import { currencyItem, storeInventory, storeRecipes } from '../planner/stores';
+import { currencyItem, redStarOffers, storeInventory, storeRecipes } from '../planner/stores';
 import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, setStarsOff, useUnlocks, type GoalReport } from '../data/unlocks';
 import { eventStarGoals, MAX_YELLOW } from '../planner/eventStars';
 
@@ -234,7 +234,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildSchedule({
       owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
-      gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, targets, modeTags,
+      gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, redStars: redStarOffers(stores), targets, modeTags,
       modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
     });
   }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores]);

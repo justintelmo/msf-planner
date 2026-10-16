@@ -132,4 +132,23 @@ describe('buildSchedule', () => {
     const star = s.steps.find((x) => x.title === 'Promote 5★ → 6★')!;
     expect(star.uses).toContainEqual({ item: 'STORE_CURRENCY_ch', quantity: 150 * 40 });
   });
+
+  it('never buys a locked ability and levels the character up instead', () => {
+    const s = buildSchedule({
+      owned: [hero('H', { level: 1, basic: 1, special: 1, ultimate: 0, passive: 0, gearTier: 1 })],
+      inventory: [{ item: 'XP80', quantity: 100 }, { item: 'SC', quantity: 1e9 }], upgrades, levelCap: 100, priority: { H: 40 },
+    });
+    const titles = s.steps.map((x) => x.title);
+    expect(titles.some((t) => /^(Ultimate|Passive) 0/.test(t))).toBe(false);
+    expect(s.steps.find((x) => x.kind === 'level')?.detail).toContain('still locked');
+  });
+
+  it('buys store red stars up to the yellow stars', () => {
+    const s = buildSchedule({
+      owned: [hero('R', { activeYellow: 6, activeRed: 4 })],
+      inventory: [{ item: 'STORE_CURRENCY_ch', quantity: 10_000 }, { item: 'SC', quantity: 1e9 }], upgrades, levelCap: 100, priority: { R: 40 },
+      recipes: { STORE_RED_STAR_R: [{ item: 'STORE_CURRENCY_ch', quantity: 1000 }] }, redStars: new Set(['R']),
+    });
+    expect(s.steps.filter((x) => x.title.startsWith('Red star')).map((x) => x.title)).toEqual(['Red star 4 → 5', 'Red star 5 → 6']);
+  });
 });

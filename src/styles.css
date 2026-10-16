@@ -299,3 +299,9 @@ details > summary { cursor: pointer; }
 @media (vertical-viewport-segments: 2) {
   .why-sheet, .sheet { position: fixed; margin: 0; inset: env(viewport-segment-top 0 1) 0 auto 0; width: 100%; height: env(viewport-segment-height 0 1); max-height: none; border-radius: 12px 12px 0 0; }
 }
+
+.bulk-offers { margin-top: 10px; }
+.bulk-offers summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.bulk-offers textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; line-height: 1.5; padding: 8px; border-radius: 8px; }
+.bulk-offers code { font-size: .9em; }
+.bulk-offers p { margin: 4px 0 10px; }

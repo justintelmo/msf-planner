@@ -146,6 +146,8 @@ function abilitySteps(c: OwnedCharacter, input: PlanInput, ledger: Ledger): Step
     const costs = input.upgrades.abilityUpgradeCosts[slot];
     const reqs = input.upgrades.abilityLevelRequirements[slot] ?? {};
     const current = inst[slot] ?? 1;
+    // Locked abilities open as the character levels; they can't be bought.
+    if (current === 0) continue;
     let reached = current;
     let spent: Cost[] = [];
     let blocked: Step | undefined;
