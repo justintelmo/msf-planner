@@ -192,6 +192,24 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
       batch.forEach((ep) => ep && sources.push(fromEpisodic(label, ep, shards)));
     }
   }
+  // Events like trials can be scheduled or past without the episodic lists showing them; read those too.
+  set({ progress: 'Reading scheduled and past events…' });
+  const known = new Set(sources.map((s) => s.id));
+  const eventEps = (await msfApi.gameEvents('episodic').catch((e) => (note('Events', e), [])))
+    .flatMap((e) => {
+      const ep = e.episodic;
+      if (!ep?.type) return [];
+      const ids = ep.type === 'eventCampaign' ? ep.ids ?? [] : ep.id ? [ep.id] : [];
+      return ids.map((id) => ({ type: ep.type!, id, name: plainName(e.name ?? id) }));
+    })
+    .filter((x, i, all) => !known.has(x.id) && all.findIndex((y) => y.id === x.id) === i);
+  for (let i = 0; i < eventEps.length; i += 4) {
+    set({ progress: `Reading events (${Math.min(i + 4, eventEps.length)} of ${eventEps.length})…` });
+    const batch = await Promise.all(
+      eventEps.slice(i, i + 4).map((x) => msfApi.episodic(x.type, x.id).then((ep) => ({ x, ep })).catch((e) => (note(x.name, e), undefined))),
+    );
+    batch.forEach((b) => b && sources.push(fromEpisodic(EPISODIC_TYPES[b.x.type] ?? 'Event', b.ep, shards)));
+  }
   const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, errors };
   writeJson(localStorage, CATALOG_KEY, catalog);
   set({ catalog, progress: null });
