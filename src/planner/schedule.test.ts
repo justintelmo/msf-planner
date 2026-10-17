@@ -135,12 +135,12 @@ describe('buildSchedule', () => {
 
   it('never buys a locked ability and levels the character up instead', () => {
     const s = buildSchedule({
-      owned: [hero('H', { level: 1, basic: 1, special: 1, ultimate: 0, passive: 0, gearTier: 1 })],
+      owned: [hero('H', { level: 12, basic: 1, special: 1, ultimate: 0, passive: 0, gearTier: 2 })],
       inventory: [{ item: 'XP80', quantity: 100 }, { item: 'SC', quantity: 1e9 }], upgrades, levelCap: 100, priority: { H: 40 },
     });
     const titles = s.steps.map((x) => x.title);
     expect(titles.some((t) => /^(Ultimate|Passive) 0/.test(t))).toBe(false);
-    expect(s.steps.find((x) => x.kind === 'level')?.detail).toContain('still locked');
+    expect(s.steps.find((x) => x.kind === 'level')?.detail).toContain('tier 3 unlocks the Ultimate');
   });
 
   it('buys store red stars up to the yellow stars', () => {
@@ -150,5 +150,28 @@ describe('buildSchedule', () => {
       recipes: { STORE_RED_STAR_R: [{ item: 'STORE_CURRENCY_ch', quantity: 1000 }] }, redStars: new Set(['R']),
     });
     expect(s.steps.filter((x) => x.title.startsWith('Red star')).map((x) => x.title)).toEqual(['Red star 4 → 5', 'Red star 5 → 6']);
+  });
+
+  it('waits on the level a gear tier needs, then unlocks the ability that tier opens', () => {
+    const tiers = { '2': { slots: [{ piece: 'P2', level: 15 }] }, '3': { slots: [] } };
+    const run = (level: number) => buildSchedule({
+      owned: [hero('G', { level, ultimate: 0, passive: 0, gearTier: 2 })],
+      inventory: [{ item: 'P2', quantity: 1 }, { item: 'XP80', quantity: 100 }, { item: 'ABILITY_MATERIAL_GREEN_ABILITY_MAT', quantity: 100 }, { item: 'SC', quantity: 1e9 }], upgrades, levelCap: 100, priority: { G: 40 },
+      gearTiers: { G: tiers },
+    }).steps.map((x) => x.title);
+    expect(run(15)).toContain('Gear tier 2 → 3');
+    const low = run(10);
+    expect(low.indexOf('Level 10 → 15')).toBeLessThan(low.indexOf('Gear tier 2 → 3'));
+    expect(low).toContain('Ultimate 1 → 2');
+  });
+
+  it('only buys as many store shards as the daily limit allows', () => {
+    const s = buildSchedule({
+      owned: [hero('S', { activeYellow: 5 })],
+      inventory: [{ item: 'STORE_CURRENCY_ch', quantity: 1e6 }, { item: 'SC', quantity: 1e9 }], upgrades, levelCap: 100, priority: { S: 40 },
+      recipes: { SHARD_S: [{ item: 'STORE_CURRENCY_ch', quantity: 80 }] }, craftLimits: { SHARD_S: 10 },
+    });
+    expect(s.steps.some((x) => x.title.startsWith('Promote'))).toBe(false);
+    expect(s.blocked.find((x) => x.title.startsWith('Promote'))?.missing).toEqual([{ item: 'SHARD_S', quantity: 190 }]);
   });
 });

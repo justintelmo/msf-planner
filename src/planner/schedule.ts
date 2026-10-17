@@ -39,6 +39,8 @@ export interface ScheduleInput {
   maxSteps?: number;
   /** Characters a store sells red stars for (bought as STORE_RED_STAR_ items through `recipes`). */
   redStars?: Set<string>;
+  /** Items that can only be crafted (bought) so many times today, e.g. store shards with a daily limit. */
+  craftLimits?: Record<string, number>;
 }
 
 export interface ScheduledStep extends Step {
@@ -87,7 +89,11 @@ class Stock {
   /** Ion ids held; the set of item ids never changes after construction. */
   private ions: string[];
 
-  constructor(inventory: ItemQuantity[], private recipes: Recipes) {
+  /** How many of an item can still be crafted, for store offers with a daily purchase limit. */
+  private limits: Map<string, number>;
+
+  constructor(inventory: ItemQuantity[], private recipes: Recipes, limits: Record<string, number> = {}) {
+    this.limits = new Map(Object.entries(limits));
     for (const { item, quantity } of inventory) {
       const id = idOf(item);
       if (id) this.stock.set(id, (this.stock.get(id) ?? 0) + (quantity ?? 0));
@@ -108,6 +114,8 @@ class Stock {
   trial(cost: Cost): { gold: number; share: number; scarcest?: string; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
+    const limitLeft = new Map<string, number>();
+    const left = (id: string) => limitLeft.get(id) ?? this.limits.get(id) ?? Infinity;
     let gold = 0;
     // The largest share of any one material's stock this uses: 0.5 = half of the scarcest one.
     let share = 0;
@@ -140,12 +148,14 @@ class Stock {
       const rest = qty - used;
       if (!rest) return;
       const recipe = this.recipes[item];
-      if (recipe && depth < 8) {
+      // Store offers with a daily limit can only be bought so many times today.
+      const make = recipe && depth < 8 ? Math.min(rest, left(item)) : 0;
+      if (make > 0) {
         if (depth === 0) crafted.push(item);
-        recipe.forEach((r) => take(r.item, r.quantity * rest, depth + 1));
-      } else {
-        missing.set(item, (missing.get(item) ?? 0) + rest);
+        if (this.limits.has(item)) limitLeft.set(item, left(item) - make);
+        recipe!.forEach((r) => take(r.item, r.quantity * make, depth + 1));
       }
+      if (rest - make > 0) missing.set(item, (missing.get(item) ?? 0) + rest - make);
     };
     cost.forEach((c) => take(c.item, c.quantity, 0));
     return {
@@ -157,7 +167,8 @@ class Stock {
       crafted,
       commit: () => {
         overlay.forEach((v, k) => this.stock.set(k, v));
-        return [...overlay.keys()];
+        limitLeft.forEach((v, k) => this.limits.set(k, v));
+        return [...overlay.keys(), ...limitLeft.keys()];
       },
     };
   }
@@ -194,6 +205,10 @@ interface Option {
 }
 
 const ABILITY_NAMES: Record<AbilitySlot, string> = strings.ability;
+/** Locked abilities open with gear tiers (Telmo, from the game): Ultimate at tier 3, Passive at tier 4. */
+const OPENS_AT_TIER: Partial<Record<AbilitySlot, number>> = { ultimate: 3, passive: 4 };
+/** Character level each opening gear tier needs, for when the gear data hasn't loaded. */
+const TIER_LEVEL: Record<number, number> = { 3: 15, 4: 20 };
 const ABILITY_VALUE: Record<AbilitySlot, number> = { ultimate: 4, special: 4, passive: 4, basic: 2 };
 const UNIQUE_MAT = 'ABILITY_MATERIAL_UNIQUE_ABILITY_MAT';
 const ION_PREFIX = 'ISO8-TIER-';
@@ -245,6 +260,14 @@ export function levelCost(upgrades: UpgradeTables, stockHas: (item: string) => n
   return sumCost(...parts);
 }
 
+/** The character level the unequipped pieces of the current gear tier need. */
+function gearLevel(cur: Cursor, input: ScheduleInput): number {
+  const slots = input.gearTiers?.[cur.c.info.id]?.[String(cur.gearTier)]?.slots;
+  const fromData = Math.max(0, ...(slots ?? []).filter((_, i) => !cur.gearSlots[i]).map((s) => s.level ?? 0));
+  // Tier 3 and 4 need levels 15 and 20 to reach (Telmo, from the game).
+  return Math.max(fromData, TIER_LEVEL[cur.gearTier + 1] ?? 0);
+}
+
 function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
   const { upgrades } = input;
   const id = cur.c.info.id;
@@ -268,20 +291,22 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
   const reqs = upgrades.abilityLevelRequirements;
   if (cur.level < input.levelCap) {
     const unlocksAt = ABILITY_SLOTS.map((s) => reqs[s]?.[cur.abilities[s] + 1]).filter((l): l is number => !!l && l > cur.level);
-    const to = Math.min(input.levelCap, Math.ceil((cur.level + 1) / 5) * 5, ...unlocksAt);
+    const gearAt = gearLevel(cur, input);
+    const to = Math.min(input.levelCap, Math.ceil((cur.level + 1) / 5) * 5, ...unlocksAt, ...(gearAt > cur.level ? [gearAt] : []));
+    const opensGear = gearAt > cur.level && gearAt <= to;
     const opens = ABILITY_SLOTS.filter((s) => (reqs[s]?.[cur.abilities[s] + 1] ?? Infinity) <= to && (reqs[s]?.[cur.abilities[s] + 1] ?? 0) > cur.level);
     const cost = levelCost(upgrades, (i) => stock.has(i), cur.level, to);
     const goalLevel = input.targets?.[id]?.target.level;
-    // Abilities at 0 are still locked; the game opens them as the character levels, and the data doesn't say when.
-    const locked = ABILITY_SLOTS.filter((s) => cur.abilities[s] === 0);
+    // Abilities at 0 are still locked; gear tiers open them, and those tiers need levels.
+    const locked = ABILITY_SLOTS.filter((s) => cur.abilities[s] === 0 && OPENS_AT_TIER[s] === cur.gearTier + 1);
     // Without the XP tables, only suggest levels that open an ability level or meet a goal.
-    if (cost || opens.length || locked.length || (goalLevel && cur.level < goalLevel)) {
+    if (cost || opens.length || opensGear || (goalLevel && cur.level < goalLevel)) {
       out.push({
         kind: 'level', title: `Level ${cur.level} → ${to}`, cost: cost ?? [], goalField: 'level',
-        value: opens.length || locked.length ? VALUE.levelUnlocksAbility : VALUE.level,
+        value: opens.length || opensGear ? VALUE.levelUnlocksAbility : VALUE.level,
         detail: [
           opens.length ? `Opens the next ${opens.map((s) => ABILITY_NAMES[s]).join(', ')} level.` : '',
-          locked.length ? `${locked.map((s) => ABILITY_NAMES[s]).join(' and ')} ${locked.length > 1 ? 'are' : 'is'} still locked; levelling up opens ${locked.length > 1 ? 'them' : 'it'}.` : '',
+          opensGear ? `Lets gear tier ${cur.gearTier} be finished${locked.length ? `, and tier ${cur.gearTier + 1} unlocks the ${locked.map((s) => ABILITY_NAMES[s]).join(' and ')}` : ''}.` : '',
         ].filter(Boolean).join(' ') || undefined,
         unchecked: cost ? undefined : 'XP tables haven’t loaded; press Sync.',
         apply: (x) => (x.level = to),
@@ -336,14 +361,19 @@ function options(cur: Cursor, input: ScheduleInput, stock: Stock): Option[] {
   // Finish the current gear tier.
   const tiers = input.gearTiers?.[id];
   const slots = tiers?.[String(cur.gearTier)]?.slots;
-  if (slots?.length && tiers?.[String(cur.gearTier + 1)]) {
+  // Pieces need the character's level, so a tier waits on the level step until then.
+  if (slots?.length && tiers?.[String(cur.gearTier + 1)] && gearLevel(cur, input) <= cur.level) {
     const pieces = slots.filter((_, i) => !cur.gearSlots[i]).map((s) => idOf(s.piece)).filter((p): p is string => !!p);
+    const next = cur.gearTier + 1;
+    const opens = ABILITY_SLOTS.filter((s) => cur.abilities[s] === 0 && OPENS_AT_TIER[s] === next);
     out.push({
-      kind: 'gear', title: `Gear tier ${cur.gearTier} → ${cur.gearTier + 1}`, value: VALUE.gear, goalField: 'gearTier',
+      kind: 'gear', title: `Gear tier ${cur.gearTier} → ${next}`, value: VALUE.gear + (opens.length ? ABILITY_VALUE.ultimate : 0), goalField: 'gearTier',
       cost: sumCost(pieces.map((item) => ({ item, quantity: 1 }))),
+      detail: opens.length ? `Unlocks the ${opens.map((s) => ABILITY_NAMES[s]).join(' and ')}.` : undefined,
       apply: (x) => {
-        x.gearTier += 1;
+        x.gearTier = next;
         x.gearSlots = [];
+        opens.forEach((s) => (x.abilities[s] = 1));
       },
     });
   }
@@ -413,7 +443,7 @@ const current = (cur: Cursor, field: keyof Target): number =>
  */
 export function buildSchedule(input: ScheduleInput): Schedule {
   // Gear recipes and crystal fuse recipes both craft from what's in the inventory.
-  const stock = new Stock(input.inventory, { ...input.upgrades.iso8CrystalRecipes, ...input.recipes });
+  const stock = new Stock(input.inventory, { ...input.upgrades.iso8CrystalRecipes, ...input.recipes }, input.craftLimits);
   const targets = input.targets ?? {};
   const cursors = input.owned
     .filter((c) => (input.priority[c.info.id] ?? 0) > 0 || targets[c.info.id])

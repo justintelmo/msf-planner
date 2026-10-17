@@ -187,6 +187,8 @@ export interface UpgradeTables {
 export type Squads = Record<string, string[][]>;
 
 export interface GearSlot {
+  /** Character level required to equip the piece to this slot. */
+  level?: number;
   piece?: Item & { tier?: number };
 }
 export type GearTiers = Record<string, { slots?: GearSlot[] }>;

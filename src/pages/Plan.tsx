@@ -17,7 +17,7 @@ import StoresPanel from './StoresPanel';
 import SourceLadder from './SourceLadder';
 import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
-import { currencyItem, redStarOffers, storeInventory, storeRecipes } from '../planner/stores';
+import { currencyItem, redStarOffers, storeInventory, storeLimits, storeRecipes } from '../planner/stores';
 import { activeGoals, catalogFilters, withLiveEvents, goalPicks, goalReports, goalTargets, setStarsOff, useUnlocks, type GoalReport } from '../data/unlocks';
 import { eventStarGoals, MAX_YELLOW } from '../planner/eventStars';
 
@@ -234,7 +234,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     const modeTags = Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.modeTags]));
     return buildSchedule({
       owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
-      gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, redStars: redStarOffers(stores), targets, modeTags,
+      gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, redStars: redStarOffers(stores), craftLimits: storeLimits(stores, snapshot.characters), targets, modeTags,
       modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
     });
   }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores]);
@@ -270,7 +270,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   const tabs: [PlanTab, string, number?][] = [
     ...(allReports.length > 0 && catalog ? [['goals', 'Goals', allReports.length] as [PlanTab, string, number]] : []),
     ['priority', 'Priority', schedule.steps.length],
-    ...(schedule.blocked.length > 0 ? [['farm', 'Farm', schedule.blocked.length] as [PlanTab, string, number]] : []),
+    ...(schedule.blocked.length > 0 ? [['farm', 'Planning', schedule.blocked.length] as [PlanTab, string, number]] : []),
     ['characters', 'Characters'],
   ];
   const [savedTab, setSavedTab] = useState<PlanTab>(() => readJson<PlanTab>(localStorage, TAB_KEY) ?? 'goals');
@@ -529,6 +529,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
                     {s.title}
                   </button>
                   {s.status === 'unchecked' && <span className="pill unchecked"> check in game</span>}
+                  {s.crafted?.some((c) => c.startsWith('SHARD_') || c.startsWith('STORE_RED_STAR_')) && <span className="pill"> buys from store</span>}
                   {s.goal && <span className="pill goal"> {s.goal}</span>}
                   {s.modeEffects?.length ? <span className="pill mode"> {s.modeEffects.map((t) => MODE_LABELS[t.mode] ?? t.mode).join(', ')} effect</span> : null}
                 </li>
@@ -546,9 +547,10 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
 
       {tab === 'farm' && (
         <>
-          <h2 id="farm">Farm next</h2>
+          <h2 id="farm">Planning: waiting on materials</h2>
           <p className="muted small">
-            The most valuable steps waiting on materials. Training modules, gear materials and shards for these come first.
+            The most valuable steps you can’t do yet, and what each still needs. Farm these materials, shards and store
+            purchases first. The Priority tab only lists what you can do with what you hold.
           </p>
           <ul className="shortages">
             {farm.slice(0, 18).map((m) => (

@@ -37,3 +37,16 @@ export function storeRecipes(stores: Stores, characters: CharacterInfo[]): Recor
   }
   return Object.fromEntries([...best].map(([item, o]) => [item, [{ item: currencyItem(o.currencyId), quantity: o.price / o.shards }]]));
 }
+
+/** How many shards (or red stars) each store item can be bought today, for offers with a daily purchase limit. */
+export function storeLimits(stores: Stores, characters: CharacterInfo[]): Record<string, number> {
+  const byId = new Map(characters.map((c) => [c.id, c]));
+  const out: Record<string, number> = {};
+  for (const o of stores.offers) {
+    if (!(o.price > 0 && o.shards > 0) || !byId.has(o.characterId)) continue;
+    const item = o.kind === 'redStar' ? redStarItem(o.characterId) : shardOf(byId.get(o.characterId)!);
+    // Any offer without a limit means the item isn't limited.
+    out[item] = !o.perDay || out[item] === Infinity ? Infinity : (out[item] ?? 0) + o.perDay * o.shards;
+  }
+  return Object.fromEntries(Object.entries(out).filter(([, n]) => n !== Infinity));
+}
