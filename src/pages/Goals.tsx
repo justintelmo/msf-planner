@@ -73,7 +73,7 @@ export default function Goals({ snapshot }: { snapshot: Snapshot }) {
 
       <div className="toolbar">
         {live ? (
-          <button onClick={() => void loadCatalog(snapshot.characters)} disabled={!!progress}>
+          <button onClick={() => void loadCatalog(snapshot.characters, snapshot.events)} disabled={!!progress}>
             {progress ?? (catalog ? 'Refresh unlock content' : 'Load unlock content')}
           </button>
         ) : (

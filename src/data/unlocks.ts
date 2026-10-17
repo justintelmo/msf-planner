@@ -47,6 +47,8 @@ export interface Catalog {
   raidGroups?: Record<string, string>;
   /** Pick Your Poison maps (Scourge trials…); missing in catalogs read before they were. */
   pyps?: RaidSource[];
+  /** Episodic ids the last refresh tried to read, so ones it couldn't don't keep asking for a refresh. */
+  triedEvents?: string[];
   errors: string[];
 }
 
@@ -133,7 +135,7 @@ export function withLiveEvents(catalog: Catalog | null, events: EventInfo[], cha
 export function unreadEvents(catalog: Catalog | null, events: EventInfo[]): string[] {
   if (!catalog) return [];
   const now = Date.now() / 1000;
-  const known = new Set(catalog.sources.map((s) => s.id));
+  const known = new Set([...catalog.sources.map((s) => s.id), ...(catalog.triedEvents ?? [])]);
   return events
     .filter((e) => e.endTime > now && e.episodic)
     .filter((e) => {
@@ -144,7 +146,7 @@ export function unreadEvents(catalog: Catalog | null, events: EventInfo[]): stri
 }
 
 /** Reads every Dark Dimension and episodic from the API and keeps what unlocks need. */
-export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
+export async function loadCatalog(characters: CharacterInfo[], running: EventInfo[] = []): Promise<void> {
   if (state.progress) return;
   const shards = shardIndex(characters);
   const sources: UnlockSource[] = [];
@@ -218,7 +220,9 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
   // Events like trials can be scheduled or past without the episodic lists showing them; read those too.
   set({ progress: 'Reading scheduled and past events…' });
   const known = new Set(sources.map((s) => s.id));
-  const eventEps = (await msfApi.gameEvents('episodic').catch((e) => (note('Events', e), [])))
+  // Running events from the last Sync are read too, in case the schedule list leaves them out.
+  const listedEvents = await msfApi.gameEvents('episodic').catch((e) => (note('Events', e), []));
+  const eventEps = [...running.filter((e) => e.episodic), ...listedEvents]
     .flatMap((e) => {
       const ep = e.episodic;
       if (!ep?.type) return [];
@@ -229,11 +233,13 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
   for (let i = 0; i < eventEps.length; i += 4) {
     set({ progress: `Reading events (${Math.min(i + 4, eventEps.length)} of ${eventEps.length})…` });
     const batch = await Promise.all(
-      eventEps.slice(i, i + 4).map((x) => msfApi.episodic(x.type, x.id).then((ep) => ({ x, ep })).catch((e) => (note(x.name, e), undefined))),
+      eventEps.slice(i, i + 4).map((x) => msfApi.episodic(x.type, x.id).then((ep) => ({ x, ep })).catch((e) => (note(`${x.name} (${x.type})`, e), undefined))),
     );
-    batch.forEach((b) => b && sources.push(fromEpisodic(EPISODIC_TYPES[b.x.type] ?? 'Event', b.ep, shards)));
+    // Keep the id the event names: the reply's own id can be missing or spelled differently.
+    batch.forEach((b) => b && sources.push({ ...fromEpisodic(EPISODIC_TYPES[b.x.type] ?? 'Event', b.ep, shards), id: b.x.id }));
   }
-  const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, pyps, errors };
+  const triedEvents = eventEps.map((x) => x.id);
+  const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, pyps, errors, triedEvents };
   writeJson(localStorage, CATALOG_KEY, catalog);
   set({ catalog, progress: null });
 }
