@@ -7,6 +7,26 @@ export interface UnlockNode {
   requirements?: Requirements;
   /** Characters whose shards this node can reward. */
   rewards: string[];
+  /** Energy per attempt, for campaign-style nodes. */
+  energy?: number;
+  /** Shards each repeatable win can drop. */
+  drops?: ShardDrop[];
+  /** Times the limited rewards can be won, when capped. */
+  limit?: number;
+}
+
+/** A character's shards in a node's repeatable rewards. */
+export interface ShardDrop {
+  characterId: string;
+  /** Shards per win on average; unknown when a "chance of" package hides the odds. */
+  perWin?: number;
+  /** Fewest and most shards one win can give. */
+  min: number;
+  max: number;
+  /** True when the drop sits behind a chance the game data doesn't quantify. */
+  chance: boolean;
+  /** Part of the limited rewards rather than every win. */
+  limited?: boolean;
 }
 
 /** Content that can unlock characters: a Dark Dimension or an episodic event. */
@@ -45,6 +65,45 @@ export function rewardCharacters(tree: unknown, shards: ShardIndex): string[] {
   return [...found];
 }
 
+type Package = { item?: unknown; oneOf?: Package[]; allOf?: Package[]; chanceOf?: Package; quantity?: number; maxQuantity?: number; weight?: number; pulls?: number };
+
+/**
+ * Shard drops in a reward package: oneOf children by weight, pulls multiplied, and
+ * any "chanceOf" marked unknown since the game data doesn't give its odds.
+ */
+export function shardDrops(tree: unknown, shards: ShardIndex, limited = false): ShardDrop[] {
+  const out = new Map<string, ShardDrop>();
+  const walk = (p: Package | undefined, odds: number, pulls: number, chance: boolean) => {
+    if (!p || typeof p !== 'object') return;
+    if (p.item !== undefined) {
+      const id = typeof p.item === 'string' ? p.item : (p.item as { id?: string })?.id;
+      const cid = id && shards.get(id);
+      if (!cid) return;
+      const min = p.quantity ?? 1;
+      const max = p.maxQuantity ?? min;
+      const prev = out.get(cid);
+      const each = ((min + max) / 2) * odds * pulls;
+      out.set(cid, {
+        characterId: cid, limited,
+        chance: chance || !!prev?.chance,
+        perWin: chance || prev?.chance ? undefined : (prev?.perWin ?? 0) + each,
+        min: Math.min(prev?.min ?? Infinity, odds === 1 && !chance ? min * pulls : 0),
+        max: (prev?.max ?? 0) + max * pulls,
+      });
+      return;
+    }
+    const n = pulls * (p.pulls ?? 1);
+    if (p.allOf) p.allOf.forEach((c) => walk(c, odds, n, chance));
+    if (p.oneOf) {
+      const total = p.oneOf.reduce((t, c) => t + (c.weight ?? 1), 0) || 1;
+      p.oneOf.forEach((c) => walk(c, odds * ((c.weight ?? 1) / total), n, chance));
+    }
+    if (p.chanceOf) walk(p.chanceOf, odds, n, true);
+  };
+  walk(tree as Package, 1, 1, false);
+  return [...out.values()];
+}
+
 function hasCharacterRequirement(r: Requirements | undefined): r is Requirements {
   return !!r && !!(r.anyCharacterFilters?.length || r.specificCharacters?.length || r.minCharacters);
 }
@@ -77,10 +136,14 @@ export function fromEpisodic(kind: string, ep: EpisodicInfo, shards: ShardIndex)
       nodes.push({ label: `Chapter ${ch}`, requirements: chapter.requirements, rewards: [] });
     }
     for (const [tier, node] of Object.entries(chapter.tiers ?? {})) {
+      const drops = [...shardDrops(node.rewards, shards), ...shardDrops(node.limitedRewards, shards, true)];
       nodes.push({
         label: `${prefix} ${ch}-${tier}`.trim(),
         requirements: firstReq(node.requirements),
         rewards: nodeRewards(node, shards),
+        ...(node.energyCost ? { energy: node.energyCost } : {}),
+        ...(drops.length ? { drops } : {}),
+        ...(node.limitedRewardsLimit ? { limit: node.limitedRewardsLimit } : {}),
       });
     }
   }

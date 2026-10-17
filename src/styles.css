@@ -305,3 +305,7 @@ details > summary { cursor: pointer; }
 .bulk-offers textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; line-height: 1.5; padding: 8px; border-radius: 8px; }
 .bulk-offers code { font-size: .9em; }
 .bulk-offers p { margin: 4px 0 10px; }
+
+.farm-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+.farm-list li p { margin: 4px 0; }
+.farm .cores .amounts { flex-wrap: wrap; }

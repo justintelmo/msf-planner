@@ -1,5 +1,5 @@
 import { idOf, type CharacterInfo, type Cost, type ItemQuantity } from '../api/types';
-import type { ShardOffer, Stores } from '../data/stores';
+import { DEFAULT_BUYS_PER_DAY, type ShardOffer, type Stores } from '../data/stores';
 
 /** Inventory id for a typed-in store currency. */
 export const currencyItem = (id: string) => `STORE_CURRENCY_${id}`;
@@ -38,15 +38,14 @@ export function storeRecipes(stores: Stores, characters: CharacterInfo[]): Recor
   return Object.fromEntries([...best].map(([item, o]) => [item, [{ item: currencyItem(o.currencyId), quantity: o.price / o.shards }]]));
 }
 
-/** How many shards (or red stars) each store item can be bought today, for offers with a daily purchase limit. */
+/** How many shards (or red stars) each store item can be bought in a day: each offer restocks every 6 hours. */
 export function storeLimits(stores: Stores, characters: CharacterInfo[]): Record<string, number> {
   const byId = new Map(characters.map((c) => [c.id, c]));
   const out: Record<string, number> = {};
   for (const o of stores.offers) {
     if (!(o.price > 0 && o.shards > 0) || !byId.has(o.characterId)) continue;
     const item = o.kind === 'redStar' ? redStarItem(o.characterId) : shardOf(byId.get(o.characterId)!);
-    // Any offer without a limit means the item isn't limited.
-    out[item] = !o.perDay || out[item] === Infinity ? Infinity : (out[item] ?? 0) + o.perDay * o.shards;
+    out[item] = (out[item] ?? 0) + (o.perDay || DEFAULT_BUYS_PER_DAY) * o.shards;
   }
-  return Object.fromEntries(Object.entries(out).filter(([, n]) => n !== Infinity));
+  return out;
 }

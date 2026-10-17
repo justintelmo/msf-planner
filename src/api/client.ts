@@ -413,9 +413,15 @@ export const msfApi = {
   },
   /** An episodic with each chapter's tiers, their requirements and rewards. */
   async episodic(type: string, id: string): Promise<EpisodicInfo> {
-    return (await get<EpisodicInfo>(`/game/v1/episodics/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, {
-      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'part', nodeReqs: 'full', nodeRewards: 'full', pieceInfo: 'none',
-    })).data;
+    const path = `/game/v1/episodics/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+    const params = { itemFormat: 'id', traitFormat: 'id', nodeReqs: 'full', nodeRewards: 'full', nodeCombat: 'none', pieceInfo: 'none' };
+    // Full node info adds energy costs; without it the episodic still has requirements and rewards.
+    try {
+      return (await get<EpisodicInfo>(path, { ...params, nodeInfo: 'full' })).data;
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 472) throw e;
+      return (await get<EpisodicInfo>(path, { ...params, nodeInfo: 'part' })).data;
+    }
   },
   /** Every trait with its English name. */
   async traits(): Promise<{ id: string; name?: string }[]> {

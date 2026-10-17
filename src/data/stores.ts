@@ -26,7 +26,7 @@ export interface ShardOffer {
   price: number;
   /** Shards (or red stars) per purchase. */
   shards: number;
-  /** Purchases allowed per day, if the store limits it. */
+  /** Purchases per day; offers restock when the store refreshes every 6 hours, so 4 when not set. */
   perDay?: number;
 }
 
@@ -55,3 +55,6 @@ export function saveStores(next: Stores) {
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 9);
+
+/** Each offer restocks when its store refreshes, every 6 hours. */
+export const DEFAULT_BUYS_PER_DAY = 4;

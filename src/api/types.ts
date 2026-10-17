@@ -248,6 +248,8 @@ export interface NodeInfo {
   details?: string;
   isBoss?: boolean;
   energyCost?: number;
+  /** How many times the limited rewards can be won (event campaigns). */
+  limitedRewardsLimit?: number;
   requirements?: Requirements | (Requirements | null)[];
   combatId?: string;
   combat?: NodeCombat;

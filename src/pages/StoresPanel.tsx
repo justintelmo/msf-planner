@@ -93,7 +93,7 @@ export default function StoresPanel({ owned, nameOf }: { owned: OwnedCharacter[]
               </label>
               <Num label={o.kind === 'redStar' ? 'Red stars per purchase' : 'Shards per purchase'} value={o.shards} onSave={(v) => setOffer(o.id, { shards: v ?? 0 })} />
               <Num label={`Price (${currencyName(o.currencyId)})`} value={o.price} onSave={(v) => setOffer(o.id, { price: v ?? 0 })} />
-              <Num label="Purchases per day" value={o.perDay} onSave={(v) => setOffer(o.id, { perDay: v })} placeholder="no limit" />
+              <Num label="Buys per day" value={o.perDay} onSave={(v) => setOffer(o.id, { perDay: v })} placeholder="4 (refresh every 6h)" />
               <button className="ghost small" aria-label={`Remove offer for ${nameOf(o.characterId)}`}
                 onClick={() => update({ offers: stores.offers.filter((x) => x.id !== o.id) })}>
                 Remove
@@ -134,7 +134,7 @@ function BulkOffers({ currency, owned, nameOf }: { currency: Stores['currencies'
       <summary className="small">Type or paste {currency.name} offers</summary>
       <p className="muted small">
         One per line: <code>Shadow King, 5, 400</code> is 5 shards for 400; <code>Knull, red star, 1500</code> is a red star for
-        1,500. Add a last number for purchases a day (<code>, 2</code>). Applying replaces this store’s offers.
+        1,500. Offers restock every 6 hours, so each counts as 4 buys a day; add a last number to change that (<code>, 2</code>). Applying replaces this store’s offers.
       </p>
       <textarea
         rows={Math.min(14, Math.max(4, shown.split('\n').length + 1))} value={shown} spellCheck={false} autoCapitalize="words"

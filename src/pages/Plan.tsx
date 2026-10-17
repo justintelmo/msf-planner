@@ -14,6 +14,7 @@ import { GOLD_ID, useWallet } from '../data/wallet';
 import Currencies, { withTypedAmounts } from './Currencies';
 import SyncReview from './SyncReview';
 import StoresPanel from './StoresPanel';
+import FarmPanel from './FarmPanel';
 import SourceLadder from './SourceLadder';
 import { CharName, CharPortrait, CostChips, ItemChip } from './Details';
 import { useStores } from '../data/stores';
@@ -253,6 +254,11 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
       const short = missing.find((m) => m.item === currencyItem(c.id));
       return short && c.perDay ? [`≈${Math.ceil(short.quantity / c.perDay)} days of ${c.name}`] : [];
     });
+    // Store shards are capped by restocks: each offer can be bought once per 6-hour refresh.
+    const limits = storeLimits(stores, snapshot.characters);
+    for (const m of missing) {
+      if (limits[m.item]) waits.push(`≈${Math.ceil(m.quantity / limits[m.item])} more days of store buys`);
+    }
     return waits.join(', ');
   };
   const byDay = useMemo(() => {
@@ -566,6 +572,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
               </li>
             ))}
           </ol>
+          <FarmPanel blocked={schedule.blocked} owned={owned} characters={snapshot.characters} catalog={catalog} />
         </>
       )}
 
