@@ -104,6 +104,8 @@ function shardIndex(characters: CharacterInfo[]): ShardIndex {
   for (const c of characters) {
     m.set(idOf(c.starItems?.[0]) ?? `SHARD_${c.id.toUpperCase()}`, c.id);
     m.set(`SHARD_${c.id.toUpperCase()}`, c.id);
+    // Star tokens and red stars name the character in upper case (UT_OLDMANLOGAN_…, RS_OLDMANLOGAN_1).
+    m.set(`CHAR:${c.id.toUpperCase()}`, c.id);
   }
   return m;
 }

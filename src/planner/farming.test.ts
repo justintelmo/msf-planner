@@ -42,3 +42,15 @@ describe('farmOptions', () => {
     expect([1, 2, 3, 4].map((n) => refreshCost(50, n, 2))).toEqual([50, 50, 100, 200]);
   });
 });
+
+import scourge from './__fixtures__/scourge-oml.json';
+import { fromLiveEvent } from './unlocks';
+import type { EventInfo } from '../api/types';
+
+describe('star tokens', () => {
+  it('reads Old Man Logan from a Scourge event that gives star tokens and red stars, not shards', () => {
+    const src = fromLiveEvent(scourge as unknown as EventInfo, new Map([['CHAR:OLDMANLOGAN', 'OldManLogan']]))!;
+    expect(src.rewards).toEqual(['OldManLogan']);
+    expect(src.subName).toBe('Earn Old Man Logan Shards · score for 4★ at 1.1M, 5★ at 3.3M, 6★ at 6.7M, 7★ at 13.5M; red stars at 1.6M, 2.3M, 4.7M, 9.5M');
+  });
+});
