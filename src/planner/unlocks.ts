@@ -38,6 +38,8 @@ export interface UnlockSource {
   nodes: UnlockNode[];
   /** Characters rewarded by any node or by completing the whole thing. */
   rewards: string[];
+  /** Score tiers hand out yellow star tokens (trials), so stars come straight from this event. */
+  starTokens?: boolean;
 }
 
 /** Maps reward item ids (e.g. SHARD_ODIN) to character ids. */
@@ -186,6 +188,7 @@ export function fromLiveEvent(e: EventInfo, shards: ShardIndex): UnlockSource | 
     subName: [plainName(e.subName), ladder].filter(Boolean).join(' · '),
     nodes: hasCharacterRequirement(req) ? [{ label: 'Entry', requirements: req, rewards }] : [],
     rewards,
+    ...(ladder.includes('★') ? { starTokens: true } : {}),
   };
 }
 

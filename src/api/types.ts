@@ -137,7 +137,7 @@ export interface EventInfo {
   tower?: { requirements?: Requirements; brackets?: unknown[] };
   /** Points to the episodic (event campaign, flash or unlock event) this event runs. */
   episodic?: { type?: string; id?: string; ids?: string[] };
-  pickYourPoison?: { brackets?: unknown[] };
+  pickYourPoison?: { typeName?: string; brackets?: unknown[] };
   battlePass?: { brackets?: unknown[] };
   strikePass?: { brackets?: unknown[] };
 }

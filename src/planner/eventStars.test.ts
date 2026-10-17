@@ -27,4 +27,11 @@ describe('eventStarGoals', () => {
   it('skips characters already set as goals or turned off', () => {
     expect(eventStarGoals([ranked('ShadowKing', 5, [war])], sources, new Set(['ShadowKing']))).toEqual([]);
   });
+
+  it('tracks trial characters for star tokens even when locked or off every team', () => {
+    const trial = { ...source('Pick Your Poison event', ['ShadowKing']), starTokens: true };
+    const locked = { info: { id: 'ShadowKing', name: 'Shadow King' } };
+    const goals = eventStarGoals([], [trial], new Set(), [locked]);
+    expect(goals.map((g) => [g.characterId, g.stars, g.teams.length])).toEqual([['ShadowKing', 0, 0]]);
+  });
 });

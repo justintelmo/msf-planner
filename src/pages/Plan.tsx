@@ -185,8 +185,8 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   );
   // Team characters whose stars only come from events get those events as goals of their own.
   const starGoals = useMemo(
-    () => (catalog ? eventStarGoals(rank(reports), catalog.sources, new Set([...allGoals, ...starsOff])) : []),
-    [rank, reports, catalog, allGoals, starsOff],
+    () => (catalog ? eventStarGoals(rank(reports), catalog.sources, new Set([...allGoals, ...starsOff]), owned) : []),
+    [rank, reports, catalog, allGoals, starsOff, owned],
   );
   const allReports = useMemo(
     () => [
@@ -195,7 +195,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
         ...goalReports([g.characterId], { ...catalog!, sources: g.sources }, owned)[0],
         label: `${nameOfId(g.characterId)} to ${MAX_YELLOW}★`,
         group: EVENT_STARS,
-        note: `At ${g.stars}★, for ${g.teams.slice(0, 2).map((t) => t.label).join('; ')}. Their shards come from ${g.sources.map((x) => x.name).join(', ')}.`,
+        note: `At ${g.stars}★${g.teams.length ? `, for ${g.teams.slice(0, 2).map((t) => t.label).join('; ')}` : ''}. Their stars come from ${g.sources.map((x) => (x.subName ? `${x.name} (${x.subName})` : x.name)).join(', ')}.`,
       })),
     ],
     [reports, starGoals, catalog, owned, nameOfId],

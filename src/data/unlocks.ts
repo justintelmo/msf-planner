@@ -7,6 +7,7 @@ import { mergeTargets, planRequirement, type RequirementPlan, type Target } from
 import type { OwnedCharacter } from '../planner/requirements';
 export { activeGoals } from '../planner/requirements';
 import { wantRaidDetail } from './modeGoals';
+import { withPypMap } from './pyp';
 import {
   distinctRequirements, fromDarkDimension, fromEpisodic, fromLiveEvent, prerequisiteIds, type ShardIndex, type UnlockSource,
 } from '../planner/unlocks';
@@ -44,6 +45,8 @@ export interface Catalog {
   raids?: RaidSource[];
   /** Raid group id → name. */
   raidGroups?: Record<string, string>;
+  /** Pick Your Poison maps (Scourge trials…); missing in catalogs read before they were. */
+  pyps?: RaidSource[];
   errors: string[];
 }
 
@@ -121,7 +124,7 @@ export function withLiveEvents(catalog: Catalog | null, events: EventInfo[], cha
   const known = new Set(catalog.sources.map((s) => s.id));
   const live = events
     .filter((e) => e.endTime > now)
-    .map((e) => fromLiveEvent(e, shards))
+    .map((e) => withPypMap(fromLiveEvent(e, shards), e, catalog.pyps ?? []))
     .filter((s): s is UnlockSource => !!s && !known.has(s.id));
   return live.length ? { ...catalog, sources: [...catalog.sources, ...live] } : catalog;
 }
@@ -183,6 +186,24 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
       });
     }
   }
+  // Pick Your Poison maps, which score events like the Scourge trials are played on.
+  set({ progress: 'Reading Pick Your Poison maps…' });
+  const pyps: RaidSource[] = [];
+  const pypList = await msfApi.pickYourPoisons().catch((e) => (note('Pick Your Poison', e), []));
+  for (let i = 0; i < pypList.length; i += 2) {
+    const batch = await Promise.all(
+      pypList.slice(i, i + 2).map((p) => msfApi.pickYourPoison(p.id, p.maxDifficulty).catch((e) => (note(p.name ?? p.id, e), undefined))),
+    );
+    batch.forEach((p, j) => {
+      const listedAs = pypList[i + j];
+      const asDd = p && fromDarkDimension(p, shards);
+      pyps.push({
+        id: listedAs.id, name: plainName(p?.name ?? listedAs.name ?? listedAs.id), subName: plainName(p?.subName ?? listedAs.subName),
+        teams: p?.teams ?? listedAs.teams, maxDifficulty: p?.maxDifficulty ?? listedAs.maxDifficulty,
+        difficulties: p?.difficulties ?? {}, rooms: asDd?.nodes ?? [],
+      });
+    });
+  }
   for (const [type, label] of Object.entries(EPISODIC_TYPES)) {
     set({ progress: `Reading ${label.toLowerCase()}s…` });
     const list = await msfApi.episodics(type).catch((e) => (note(label, e), []));
@@ -212,7 +233,7 @@ export async function loadCatalog(characters: CharacterInfo[]): Promise<void> {
     );
     batch.forEach((b) => b && sources.push(fromEpisodic(EPISODIC_TYPES[b.x.type] ?? 'Event', b.ep, shards)));
   }
-  const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, errors };
+  const catalog = { loadedAt: Date.now(), sources, raids, raidGroups, pyps, errors };
   writeJson(localStorage, CATALOG_KEY, catalog);
   set({ catalog, progress: null });
 }
