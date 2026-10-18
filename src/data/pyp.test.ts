@@ -15,6 +15,10 @@ describe('Pick Your Poison events', () => {
   const e = { ...(event as unknown as EventInfo), endTime: Date.now() / 1000 + 3600 };
   const shards: ShardIndex = new Map([['CHAR:OLDMANLOGAN', 'OldManLogan']]);
 
+  it('finds a trial map by the character the event is named for', () => {
+    expect(pypMapFor(e, [map('shadowking_trials_01', ''), map('oldmanlogan_trials_01', '')])?.id).toBe('oldmanlogan_trials_01');
+  });
+
   it('finds the map by the event type name', () => {
     expect(pypMapFor(e, [map('other', 'Gauntlet'), map('sc', 'Scourge')])?.id).toBe('sc');
   });

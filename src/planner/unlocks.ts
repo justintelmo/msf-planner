@@ -131,12 +131,19 @@ function nodeRewards(n: NodeInfo, shards: ShardIndex): string[] {
 
 const firstReq = (r: NodeInfo['requirements']) => (Array.isArray(r) ? (r[0] ?? undefined) : r);
 
+/** "Room A2 (ScarletWitch boss)": unnamed rooms show the boss portrait they're drawn with. */
+function roomLabel(id: string, node: NodeInfo): string {
+  const icon = (node as { icon?: unknown }).icon;
+  const boss = typeof icon === 'string' ? /Portrait_([A-Za-z0-9]+)_/.exec(icon)?.[1] : undefined;
+  return boss ? `Room ${id} (${boss} boss)` : `Room ${id}`;
+}
+
 export function fromDarkDimension(dd: DarkDimension, shards: ShardIndex): UnlockSource {
   const ids = [...new Set([...(dd.rays ?? []).flat().filter(Boolean), ...Object.keys(dd.rooms ?? {})])];
   const nodes = ids
     .map((id) => ({ id, node: dd.rooms?.[id] }))
     .filter((x): x is { id: string; node: NodeInfo } => !!x.node)
-    .map(({ id, node }) => ({ label: node.name ? plainName(node.name) : `Room ${id}`, requirements: firstReq(node.requirements), rewards: nodeRewards(node, shards) }));
+    .map(({ id, node }) => ({ label: node.name ? plainName(node.name) : roomLabel(id, node), requirements: firstReq(node.requirements), rewards: nodeRewards(node, shards) }));
   const completion = rewardCharacters([dd.completion, dd.ddCompletion, dd.nodeRewards], shards);
   return {
     kind: 'Dark Dimension', id: dd.id, name: plainName(dd.name ?? dd.id), subName: plainName(dd.subName),

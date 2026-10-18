@@ -6,8 +6,13 @@ import type { RaidSource } from './unlocks';
 
 /** The Pick Your Poison map an event is played on: same name as its type ("Scourge"), else the only map. */
 export function pypMapFor(e: EventInfo, pyps: RaidSource[]): RaidSource | undefined {
-  const type = plainName(e.pickYourPoison?.typeName).toLowerCase();
-  const named = pyps.filter((p) => type && [p.name, p.subName, p.id].some((n) => n?.toLowerCase().includes(type)));
+  const squash = (n?: string) => (n ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Trial maps are named for their character (shadowking_trials_01 for the SHADOW KING event).
+  const who = squash(plainName(e.name));
+  const byName = who ? pyps.filter((p) => [p.id, p.name].some((n) => squash(n).includes(who))) : [];
+  if (byName.length) return byName[0];
+  const type = squash(plainName(e.pickYourPoison?.typeName));
+  const named = pyps.filter((p) => type && [p.name, p.subName, p.id].some((n) => squash(n).includes(type)));
   return named.length === 1 ? named[0] : pyps.length === 1 ? pyps[0] : named[0];
 }
 
