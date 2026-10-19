@@ -47,7 +47,7 @@ export interface CommunitySignal {
 }
 
 /** When the signals were last checked against Reddit. */
-export const SIGNALS_CHECKED = '2026-10-13';
+export const SIGNALS_CHECKED = '2026-10-19';
 
 const R = 'https://www.reddit.com/r/MarvelStrikeForce/comments/';
 
@@ -118,6 +118,30 @@ export const COMMUNITY_SIGNALS: CommunitySignal[] = [
     claim: 'The current leaderboard scores upgrading these teams and gives no credit for upgrades already done, so wait for it.',
     sources: [{ url: `${R}1x0ajrc/`, title: 'Don’t upgrade characters anymore...at least on your own schedule.', date: '2026-10-07', upvotes: 187 }],
     until: '2026-10-27',
+  },
+  {
+    id: 'timeless-eternals-battleworld',
+    stance: 'build',
+    team: 'Timeless Eternals',
+    characters: ['Ikaris', 'Sersi', 'Kingo'],
+    modes: ['battleworld'],
+    claim: 'After their mod buff, the top Destroyer team in Battleworld: 2–2.5B damage per attack reported, enough for a full kill on difficulty 4.',
+    sources: [
+      { url: `${R}1x7mzwb/`, title: 'Best Teams for Destroyer?', date: '2026-10-16', upvotes: 37 },
+      { url: `${R}1x7qnja/`, title: 'Feedback on the Battleworld Boss.', date: '2026-10-16', upvotes: 40 },
+    ],
+  },
+  {
+    id: 'iron-raiders-battleworld',
+    stance: 'build',
+    team: 'Iron Raiders',
+    traits: ['IronRaider'],
+    modes: ['battleworld'],
+    claim: 'A bonus team against Destroyer in Battleworld, doing about 1.1–1.2B on auto even when under-built; still time upgrades to the leaderboard hold above.',
+    sources: [
+      { url: `${R}1x7mzwb/`, title: 'Best Teams for Destroyer?', date: '2026-10-16', upvotes: 37 },
+      { url: `${R}1x7qnja/`, title: 'Feedback on the Battleworld Boss.', date: '2026-10-16', upvotes: 40 },
+    ],
   },
   {
     id: 'blue-marvel',
