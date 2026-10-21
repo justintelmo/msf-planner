@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { EventInfo } from '../api/types';
 import event from '../planner/__fixtures__/scourge-oml.json';
 import { fromLiveEvent, type ShardIndex } from '../planner/unlocks';
-import { pypMapFor, withPypMap } from './pyp';
+import { pypMapFor, trialSources, withPypMap } from './pyp';
 import type { RaidSource } from './unlocks';
 
 const map = (id: string, name: string): RaidSource => ({
@@ -30,5 +30,13 @@ describe('Pick Your Poison events', () => {
     expect(src.subName).toContain('Scourge at Nightmare');
     expect(src.nodes.map((n) => n.label)).toEqual(['Entry', 'Room A1']);
     expect(src.nodes[1].requirements?.minCharacters).toBe(5);
+  });
+
+  it('keeps each trial map as a standing source of its character’s stars', () => {
+    const sk: ShardIndex = new Map([['CHAR:SHADOWKING', 'ShadowKing'], ['CHAR:OLDMANLOGAN', 'OldManLogan']]);
+    const maps = [map('shadowking_trials_01', ''), map('oldmanlogan_trials_01', '')];
+    const out = trialSources(maps, sk, new Set(['oldmanlogan_trials_01']));
+    expect(out.map((s) => [s.id, s.rewards, s.starTokens])).toEqual([['pyp:shadowking_trials_01', ['ShadowKing'], true]]);
+    expect(out[0].nodes.map((n) => n.label)).toEqual(['Entry', 'Room A1']);
   });
 });

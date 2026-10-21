@@ -1,6 +1,6 @@
 import type { EventInfo } from '../api/types';
 import { plainName } from '../planner/export';
-import type { UnlockSource } from '../planner/unlocks';
+import type { ShardIndex, UnlockSource } from '../planner/unlocks';
 import { difficultyName, raidAt } from './modeGoals';
 import type { RaidSource } from './unlocks';
 
@@ -31,4 +31,33 @@ export function withPypMap(source: UnlockSource | undefined, e: EventInfo, pyps:
     subName: [source.subName, `${map.name} at ${difficultyName(map, top)}`].filter(Boolean).join(' · '),
     nodes: [...source.nodes, ...at.nodes],
   };
+}
+
+/** The character a trial map is for, from ids like shadowking_trials_01 or the map's name. */
+export function trialCharacter(map: RaidSource, shards: ShardIndex): string | undefined {
+  const squash = (n?: string) => (n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const head = /^([a-z0-9]+)_trials?/i.exec(map.id)?.[1];
+  for (const key of [head, map.name, map.subName]) {
+    const id = key && shards.get(`CHAR:${squash(key)}`);
+    if (id) return id;
+  }
+  return undefined;
+}
+
+/**
+ * Every trial map as a standing way to earn its character's stars, even between runs, so
+ * Old Man Logan and Shadow King always show where they come from. Maps a running event
+ * already covers are skipped, since that event carries the same rooms plus its score ladder.
+ */
+export function trialSources(pyps: RaidSource[], shards: ShardIndex, covered: Set<string>): UnlockSource[] {
+  return pyps.flatMap((map) => {
+    const characterId = trialCharacter(map, shards);
+    if (!characterId || covered.has(map.id)) return [];
+    const top = map.maxDifficulty ?? Math.max(0, ...Object.keys(map.difficulties).map(Number));
+    return [{
+      kind: 'Pick Your Poison trial', id: `pyp:${map.id}`, name: map.name || map.id,
+      subName: `stars from score tiers; checked at ${difficultyName(map, top)}`,
+      nodes: raidAt(map, top).nodes, rewards: [characterId], starTokens: true,
+    }];
+  });
 }

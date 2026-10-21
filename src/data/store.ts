@@ -103,8 +103,16 @@ export async function sync(): Promise<void> {
         msfApi.card(), msfApi.characters(), msfApi.roster(), msfApi.inventory(), msfApi.events(),
         optional('upgrade costs', msfApi.upgrades()), optional('saved squads', msfApi.squads()),
       ]);
+      // The events list can leave out a Pick Your Poison event's score tiers (the star rewards); read those one by one.
+      const fullEvents = await Promise.all(
+        events.map((e) =>
+          e.pickYourPoison?.brackets?.length || e.type !== 'pickYourPoison'
+            ? e
+            : msfApi.eventRaw(e.id).then((r) => (r as { data?: EventInfo }).data ?? e).catch(() => e),
+        ),
+      );
       snapshot = {
-        source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events, upgrades, squads, plannerErrors,
+        source: 'live', syncedAt: Date.now(), card, characters, roster, inventory, events: fullEvents, upgrades, squads, plannerErrors,
         version: SNAPSHOT_VERSION,
       };
     }

@@ -7,7 +7,7 @@ import { mergeTargets, planRequirement, type RequirementPlan, type Target } from
 import type { OwnedCharacter } from '../planner/requirements';
 export { activeGoals } from '../planner/requirements';
 import { wantRaidDetail } from './modeGoals';
-import { withPypMap } from './pyp';
+import { pypMapFor, trialSources, withPypMap } from './pyp';
 import {
   distinctRequirements, fromDarkDimension, fromEpisodic, fromLiveEvent, prerequisiteIds, type ShardIndex, type UnlockSource,
 } from '../planner/unlocks';
@@ -124,11 +124,19 @@ export function withLiveEvents(catalog: Catalog | null, events: EventInfo[], cha
   const now = Date.now() / 1000;
   const shards = shardIndex(characters);
   const known = new Set(catalog.sources.map((s) => s.id));
-  const live = events
-    .filter((e) => e.endTime > now)
+  const running = events.filter((e) => e.endTime > now);
+  const live = running
     .map((e) => withPypMap(fromLiveEvent(e, shards), e, catalog.pyps ?? []))
     .filter((s): s is UnlockSource => !!s && !known.has(s.id));
-  return live.length ? { ...catalog, sources: [...catalog.sources, ...live] } : catalog;
+  const covered = new Set(
+    running
+      .filter((e) => e.pickYourPoison && live.some((s) => s.id === `event:${e.id}`))
+      .map((e) => pypMapFor(e, catalog.pyps ?? [])?.id)
+      .filter((id): id is string => !!id),
+  );
+  const trials = trialSources(catalog.pyps ?? [], shards, covered);
+  const extra = [...live, ...trials];
+  return extra.length ? { ...catalog, sources: [...catalog.sources, ...extra] } : catalog;
 }
 
 /** Running episodic events the saved catalog hasn't read yet; refreshing unlock content picks them up. */
