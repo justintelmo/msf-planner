@@ -7,7 +7,7 @@
  *
  * Trait ids and character names: Telmo corrects these by hand. When a scan can't confirm the game's
  * id for a trait or character, don't guess silently: ask Telmo in the reply and apply his answer.
- * Confirmed by Telmo 2026-10-13: 'UncannyAvenger', 'IronRaider', 'AmazingAvenger'.
+ * Confirmed by Telmo 2026-10-13: 'UncannyAvenger', 'IronRaider', 'AmazingAvenger'. 2026-10-23: 'TimelessEternals'.
  */
 
 export type Stance =
@@ -123,7 +123,8 @@ export const COMMUNITY_SIGNALS: CommunitySignal[] = [
     id: 'timeless-eternals-battleworld',
     stance: 'build',
     team: 'Timeless Eternals',
-    characters: ['Ikaris', 'Sersi', 'Kingo'],
+    characters: ['Ikaris', 'Sersi', 'Kingo', 'Gilgamesh', 'Thena'],
+    traits: ['TimelessEternals'],
     modes: ['battleworld'],
     claim: 'After their mod buff, the top Destroyer team in Battleworld: 2–2.5B damage per attack reported, enough for a full kill on difficulty 4.',
     sources: [
