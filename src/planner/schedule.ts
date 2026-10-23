@@ -41,6 +41,8 @@ export interface ScheduleInput {
   redStars?: Set<string>;
   /** Items that can only be crafted (bought) so many times today, e.g. store shards with a daily limit. */
   craftLimits?: Record<string, number>;
+  /** Daily income of materials (e.g. ability materials read from your syncs), so slow-to-replace ones cost more. */
+  materialIncome?: Record<string, number>;
 }
 
 export interface ScheduledStep extends Step {
@@ -70,6 +72,8 @@ export interface StepWhy {
   /** That biggest share (0.5 = half of what you hold), and the item. */
   share: number;
   scarcest?: string;
+  /** Days of income the scarcest material takes to earn back, when its income is known. */
+  incomeDays?: number;
 }
 
 export interface Schedule {
@@ -82,6 +86,9 @@ export interface Schedule {
 }
 
 /** Inventory with recursive crafting. Trials run on an overlay so failed ones leave no trace. */
+/** Days of a material's income that count like using a whole stock of it. */
+const INCOME_WEEK = 7;
+
 class Stock {
   private stock = new Map<string, number>();
   /** When set, every item looked up is recorded here (see buildSchedule's evaluation cache). */
@@ -92,7 +99,7 @@ class Stock {
   /** How many of an item can still be crafted, for store offers with a daily purchase limit. */
   private limits: Map<string, number>;
 
-  constructor(inventory: ItemQuantity[], private recipes: Recipes, limits: Record<string, number> = {}) {
+  constructor(inventory: ItemQuantity[], private recipes: Recipes, limits: Record<string, number> = {}, private income: Record<string, number> = {}) {
     this.limits = new Map(Object.entries(limits));
     for (const { item, quantity } of inventory) {
       const id = idOf(item);
@@ -111,7 +118,7 @@ class Stock {
   }
 
   /** What taking `cost` would use, crafting missing pieces when a recipe exists. */
-  trial(cost: Cost): { gold: number; share: number; scarcest?: string; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
+  trial(cost: Cost): { gold: number; share: number; scarcest?: string; incomeDays?: number; used: Cost; missing: Cost; crafted: string[]; commit: () => string[] } {
     const overlay = new Map<string, number>();
     const get = (id: string) => overlay.get(id) ?? this.has(id);
     const limitLeft = new Map<string, number>();
@@ -120,6 +127,7 @@ class Stock {
     // The largest share of any one material's stock this uses: 0.5 = half of the scarcest one.
     let share = 0;
     let scarcest: string | undefined;
+    let incomeDays: number | undefined;
     const missing = new Map<string, number>();
     // Everything taken from the inventory, including what crafting and fusing ate.
     const usedItems = new Map<string, number>();
@@ -139,10 +147,15 @@ class Stock {
       if (used) {
         overlay.set(item, have - used);
         usedItems.set(item, (usedItems.get(item) ?? 0) + used);
-        const part = used / Math.max(1, this.has(item));
+        // A material that's slow to earn back costs at least its days of income: a week of it counts
+        // like a whole stock, so a big stockpile doesn't make a scarce tier look free.
+        const perDay = this.income[item];
+        const days = perDay ? used / perDay : undefined;
+        const part = Math.max(used / Math.max(1, this.has(item)), days ? days / INCOME_WEEK : 0);
         if (part > share) {
           share = part;
           scarcest = item;
+          incomeDays = days;
         }
       }
       const rest = qty - used;
@@ -162,6 +175,7 @@ class Stock {
       gold,
       share,
       scarcest,
+      incomeDays,
       used: [...usedItems].map(([item, quantity]) => ({ item, quantity })),
       missing: [...missing].map(([item, quantity]) => ({ item, quantity })),
       crafted,
@@ -443,7 +457,7 @@ const current = (cur: Cursor, field: keyof Target): number =>
  */
 export function buildSchedule(input: ScheduleInput): Schedule {
   // Gear recipes and crystal fuse recipes both craft from what's in the inventory.
-  const stock = new Stock(input.inventory, { ...input.upgrades.iso8CrystalRecipes, ...input.recipes }, input.craftLimits);
+  const stock = new Stock(input.inventory, { ...input.upgrades.iso8CrystalRecipes, ...input.recipes }, input.craftLimits, input.materialIncome);
   const targets = input.targets ?? {};
   const cursors = input.owned
     .filter((c) => (input.priority[c.info.id] ?? 0) > 0 || targets[c.info.id])
@@ -483,7 +497,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     cost: e.o.cost, missing: e.trial.missing, status, gold: e.trial.gold, score: e.score,
     crafted: e.trial.crafted.length ? e.trial.crafted : undefined, uses: e.trial.used, modeEffects: e.o.modeEffects,
     goal: e.forGoal ? targets[e.cur.c.info.id]?.why : undefined,
-    why: { value: e.o.value, weight: e.weight, goal: e.forGoal, unchecked: !!e.o.unchecked, price: e.price, share: e.trial.share, scarcest: e.trial.scarcest },
+    why: { value: e.o.value, weight: e.weight, goal: e.forGoal, unchecked: !!e.o.unchecked, price: e.price, share: e.trial.share, scarcest: e.trial.scarcest, incomeDays: e.trial.incomeDays },
   });
 
   // A cursor's options only change when it is upgraded or when an item it looked at is used,

@@ -24,6 +24,7 @@ import { eventStarGoals, MAX_YELLOW } from '../planner/eventStars';
 
 const EVENT_STARS = 'Event-gated stars for your teams';
 import { savePlanned } from '../data/planHistory';
+import { materialIncome } from '../data/materialIncome';
 import { COMMUNITY_SIGNALS } from '../data/communitySignals';
 import StepWhy, { type WhyTarget } from './StepWhy';
 import { buildSchedule, type Recipes, type ScheduledStep } from '../planner/schedule';
@@ -158,6 +159,7 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
   // and the inputs stay responsive. Only ions touch the inventory, so power cores don't trigger a rebuild.
   const gold = useDeferredValue(wallet.amounts[GOLD_ID]);
   const goldPerDay = useDeferredValue(wallet.goldPerDay);
+  const income = useMemo(() => materialIncome(wallet.amounts).perDay, [wallet.amounts, snapshot]);
   const ionKey = useDeferredValue(JSON.stringify(Object.entries(wallet.amounts).filter(([id]) => id.startsWith('ISO8-'))));
   const inventory = useMemo(
     () => [...withTypedAmounts(snapshot.inventory, Object.fromEntries(JSON.parse(ionKey) as [string, number][])), ...storeInventory(stores)],
@@ -236,9 +238,9 @@ export default function Plan({ snapshot }: { snapshot: Snapshot }) {
     return buildSchedule({
       owned, inventory, upgrades: snapshot.upgrades ?? SAMPLE_UPGRADES, levelCap, priority,
       gearTiers, recipes: { ...storeRecipes(stores, snapshot.characters), ...recipes }, redStars: redStarOffers(stores), craftLimits: storeLimits(stores, snapshot.characters), targets, modeTags,
-      modeWeights: modeWeights(modeOrder), gold, goldPerDay, days,
+      modeWeights: modeWeights(modeOrder), gold, goldPerDay, days, materialIncome: income,
     });
-  }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores]);
+  }, [owned, snapshot, inventory, levelCap, priority, details, recipes, targets, modeOrder, gold, goldPerDay, days, stores, income]);
   const whyRef = useRef<HTMLDialogElement>(null);
   const [why, setWhy] = useState<WhyTarget | null>(null);
   const openWhy = (step: ScheduledStep) => {

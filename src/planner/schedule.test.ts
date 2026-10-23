@@ -100,6 +100,18 @@ describe('buildSchedule', () => {
     expect(run(130).score).toBeLessThan(run(13_000).score * 0.6);
   });
 
+  it('prices a big stockpile of a slow-to-earn material by its days of income', () => {
+    const run = (income?: number) => buildSchedule({
+      owned: [hero('A', { ultimate: 5 })],
+      inventory: [{ item: 'ABILITY_MATERIAL_PURPLE_ABILITY_MAT', quantity: 13_000 }],
+      upgrades, levelCap: 100, priority: { A: 40 },
+      materialIncome: income ? { ABILITY_MATERIAL_PURPLE_ABILITY_MAT: income } : undefined,
+    }).steps.find((x) => x.title === 'Ultimate 5 → 6')!;
+    const slow = run(13);
+    expect(slow.why.incomeDays).toBe(10);
+    expect(slow.score).toBeLessThan(run().score * 0.6);
+  });
+
   it('fuses the crystals an ISO level needs and lists everything fusing uses', () => {
     const slots = ['HEALTH', 'DAMAGE', 'ARMOR', 'FOCUS', 'RESIST'];
     const id = (sl: string, l: number) => `ISOITEM_PURPLE_CONTROLLER_${sl}_${l}`;

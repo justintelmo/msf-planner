@@ -1,5 +1,6 @@
 import { idOf, type CharacterInstance, type EventInfo } from '../api/types';
 import { readJson, writeJson } from '../auth/storage';
+import { addSample, incomeSample, type IncomeSample } from '../planner/income';
 import type { Snapshot } from './store';
 
 const KEY = 'msf.syncHistory.v1';
@@ -51,8 +52,22 @@ export function recordSync(s: Snapshot): SyncPrint[] {
   const history = readHistory().filter((h) => h.source === s.source);
   const last = history[history.length - 1];
   if (last && same(last, print)) history[history.length - 1] = print;
-  else history.push(print);
+  else {
+    if (last && s.upgrades?.abilityUpgradeCosts) recordIncome(incomeSample(last, print, s.upgrades.abilityUpgradeCosts));
+    history.push(print);
+  }
   const kept = history.slice(-KEEP);
   writeJson(localStorage, KEY, kept);
   return kept;
+}
+
+const INCOME_KEY = 'msf.materialIncome.v1';
+
+/** Ability material earned between syncs, kept for a month so a daily rate can be worked out. */
+export function readIncome(): IncomeSample[] {
+  return (typeof localStorage !== 'undefined' && readJson<IncomeSample[]>(localStorage, INCOME_KEY)) || [];
+}
+
+function recordIncome(sample: IncomeSample) {
+  writeJson(localStorage, INCOME_KEY, addSample(readIncome(), sample));
 }

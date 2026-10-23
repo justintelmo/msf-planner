@@ -65,7 +65,8 @@ export function explainStep(
   const who = nameOf(s.characterId);
   const top = character[0]?.label;
 
-  const scarce = w.scarcest && w.share >= 0.05 ? `${pct(Math.min(1, w.share))} of your ${itemName(w.scarcest)}` : undefined;
+  const days = w.incomeDays && w.incomeDays >= 0.5 ? `about ${w.incomeDays >= 10 ? Math.round(w.incomeDays) : Math.round(w.incomeDays * 10) / 10} days of your ${itemName(w.scarcest!)} income` : undefined;
+  const scarce = w.scarcest && w.share >= 0.05 ? days ?? `${pct(Math.min(1, w.share))} of your ${itemName(w.scarcest)}` : undefined;
   const cost = [
     s.gold ? `${money(s.gold)} gold` : w.unchecked ? 'No gold, but ions or other costs the game data doesn’t show, so check them in game' : 'No gold',
     scarce ? `and ${scarce}` : s.uses?.some((u) => u.item !== 'SC') ? 'and only a small share of any one material' : '',

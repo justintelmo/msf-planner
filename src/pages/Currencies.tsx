@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { idOf, type ItemQuantity, type UpgradeTables } from '../api/types';
 import { GOLD_ID, parseAmount, POWER_CORES_ID, setAmount, setGoldPerDay, useWallet } from '../data/wallet';
 import { compact } from '../planner/items';
+import { ABILITY_TIERS, materialIncome, perDayKey } from '../data/materialIncome';
 
 /** How long typing must pause before an amount is saved and the plan recalculates. */
 const SAVE_DELAY = 600;
@@ -77,6 +78,8 @@ export default function Currencies({ inventory, upgrades, label }: {
   const typed = ions.filter((id) => !fromGame.has(id) && wallet.amounts[id] !== undefined);
   const gold = wallet.amounts[GOLD_ID];
   const cores = wallet.amounts[POWER_CORES_ID];
+  // Re-read when the inventory changes, i.e. after a sync records a new sample.
+  const income = useMemo(() => materialIncome(wallet.amounts), [wallet.amounts, inventory]);
 
   // Open on first visit until gold is entered; after that the user decides. Not tied to gold
   // directly, or the panel would snap shut on the first digit typed.
@@ -101,6 +104,19 @@ export default function Currencies({ inventory, upgrades, label }: {
         <AmountInput label="Gold on hand" value={gold} onChange={(v) => setAmount(GOLD_ID, v)} />
         <AmountInput label="Gold per day" value={wallet.goldPerDay} onChange={setGoldPerDay} placeholder="e.g. 1.5M" />
         <AmountInput label="Power cores (for reference)" value={cores} onChange={(v) => setAmount(POWER_CORES_ID, v)} placeholder="e.g. 36.8K" />
+      </div>
+      <h4>Ability material income</h4>
+      <p className="muted small">
+        {income.days >= 0.5
+          ? `Estimated from your last ${income.days >= 2 ? `${Math.round(income.days)} days` : `${Math.round(income.days * 24)} hours`} of syncs: what each stock gained plus what ability upgrades spent. `
+          : 'Sync again over the next day or two and this fills in from what your stock gains plus what ability upgrades spend. '}
+        Scarce tiers then cost the plan their days of income, so it’s sparing with them. Type a number to override.
+      </p>
+      <div className="amounts">
+        {ABILITY_TIERS.map(({ id, label: name }) => (
+          <AmountInput key={id} label={`${name} per day`} value={wallet.amounts[perDayKey(id)]} onChange={(v) => setAmount(perDayKey(id), v)}
+            placeholder={income.estimated[id] ? `≈${compact(Math.round(income.estimated[id]))} from syncs` : 'unknown'} />
+        ))}
       </div>
       <h4>Ions</h4>
       {reported.length === ions.length ? (
