@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Weekly scan of r/MarvelStrikeForce for meta discussion, read politely through safereddit.com.
+"""Weekly scan of r/MarvelStrikeForce for meta discussion, read politely through safereddit.com
+(default) or Reddit's own logged-out JSON pages (--source reddit, run from a home connection because
+Reddit blocks cloud servers).
 
 Writes a digest the weekly routine reads to update src/data/communitySignals.ts.
 
@@ -8,9 +10,9 @@ Politeness rules (so safereddit keeps serving us):
 - every page is cached in the shared cache; pages fetched in the last CACHE_DAYS are never re-fetched,
   and thread pages are fetched once, ever
 - a 429 or 503 waits once (honouring Retry-After) and then ends the run; any other error ends it too
-- only safereddit.com is contacted
+- only the chosen source's host is contacted, logged out: no login, cookies or browser
 
-Usage: python3 scripts/reddit-scan.py [--cache DIR] [--offline] [--max N]
+Usage: python3 scripts/reddit-scan.py [--source safereddit|reddit] [--cache DIR] [--offline] [--max N]
   --offline  parse only what's already cached (for testing)
 """
 import argparse
@@ -25,12 +27,14 @@ import time
 import urllib.error
 import urllib.request
 
-HOST = 'https://safereddit.com'
+SOURCES = {'safereddit': 'https://safereddit.com', 'reddit': 'https://www.reddit.com'}
+HOST = SOURCES['safereddit']
 SUB = '/r/MarvelStrikeForce'
 DELAY = 10
 MAX_REQUESTS = 25
 CACHE_DAYS = 6
 UA = 'msf-planner-weekly-meta-scan/1.0 (personal, ~25 requests a week)'
+JSON = False  # True when reading Reddit's .json pages
 
 # Listings worth a look each week: newest, top of the week, and meta searches from the past week.
 LISTINGS = [
@@ -66,7 +70,7 @@ class Fetcher:
         url = HOST + path
         k = key(url)
         entry = self.index.get(k)
-        file = os.path.join(self.cache, f'{k}.html')
+        file = os.path.join(self.cache, f'{k}.json' if JSON else f'{k}.html')
         if entry and os.path.exists(file):
             age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(entry['fetched'].replace('Z', '+00:00'))
             if max_age_days is None or age.days < max_age_days or self.offline:
@@ -80,7 +84,7 @@ class Fetcher:
             self.last = time.time()
             self.requests += 1
             try:
-                req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'text/html'})
+                req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json' if JSON else 'text/html'})
                 with urllib.request.urlopen(req, timeout=30) as r:
                     body = r.read().decode('utf-8', 'replace')
                     final = r.geturl()
@@ -125,6 +129,46 @@ def posts(page):
     return out
 
 
+def json_path(path):
+    """Reddit's JSON twin of a listing or thread path: /r/X/new -> /r/X/new.json, keeping the query."""
+    base, _, query = path.partition('?')
+    return base.rstrip('/') + '.json' + ('?' + query if query else '')
+
+
+def utc(ts):
+    return dt.datetime.fromtimestamp(ts or 0, dt.timezone.utc).strftime('%b %d %Y, %H:%M:%S UTC')
+
+
+def posts_json(page):
+    try:
+        children = json.loads(page)['data']['children']
+    except (ValueError, KeyError, TypeError):
+        return []
+    out = []
+    for c in children:
+        d = c.get('data', {})
+        if c.get('kind') != 't3' or not d.get('permalink'):
+            continue
+        out.append({
+            'id': d['id'], 'title': d.get('title', ''), 'path': d['permalink'], 'created': utc(d.get('created_utc')),
+            'score': int(d.get('score', 0)), 'comments': int(d.get('num_comments', 0)),
+        })
+    return out
+
+
+def thread_json(page, top=12):
+    try:
+        post, comments = json.loads(page)[:2]
+        body = post['data']['children'][0]['data'].get('selftext', '')
+        children = comments['data']['children']
+    except (ValueError, KeyError, TypeError, IndexError):
+        return {'body': '', 'comments': []}
+    out = [{'score': int(c['data'].get('score', 0)), 'created': utc(c['data'].get('created_utc')), 'text': c['data'].get('body', '')[:800]}
+           for c in children if c.get('kind') == 't1']
+    out.sort(key=lambda c: -c['score'])
+    return {'body': body[:2000], 'comments': out[:top]}
+
+
 def thread(page, top=12):
     """The post's text and its highest-scored comments."""
     body = re.search(r'<div class="post_body">(.*?)</div>\s*</div>', page, re.S) or re.search(r'class="post_body[^"]*">(.*?)</div>', page, re.S)
@@ -140,7 +184,13 @@ def main():
     ap.add_argument('--cache', default='/mnt/project-files/msf-planner/reddit-cache')
     ap.add_argument('--offline', action='store_true')
     ap.add_argument('--max', type=int, default=MAX_REQUESTS)
+    ap.add_argument('--source', choices=sorted(SOURCES), default='safereddit')
     args = ap.parse_args()
+    global HOST, JSON
+    HOST, JSON = SOURCES[args.source], args.source == 'reddit'
+    args.max = min(args.max, MAX_REQUESTS)
+    to_path = json_path if JSON else (lambda p: p)
+    read_posts, read_thread = (posts_json, thread_json) if JSON else (posts, thread)
     os.makedirs(args.cache, exist_ok=True)
     state_path = os.path.join(args.cache, 'scan-state.json')
     state = json.load(open(state_path)) if os.path.exists(state_path) else {'seen': []}
@@ -149,25 +199,25 @@ def main():
 
     found = {}
     for path in LISTINGS:
-        page = f.get(path)
-        for p in posts(page or ''):
+        page = f.get(to_path(path))
+        for p in read_posts(page or ''):
             found.setdefault(p['id'], p)
     fresh = [p for p in found.values() if p['id'] not in seen and p['score'] >= MIN_SCORE and TOPIC.search(p['title'])]
     fresh.sort(key=lambda p: -(p['score'] + 2 * p['comments']))
 
     digest = []
     for p in fresh[:MAX_THREADS]:
-        page = f.get(p['path'], max_age_days=None)  # threads: fetch once, keep forever
+        page = f.get(to_path(p['path']), max_age_days=None)  # threads: fetch once, keep forever
         if page is None:
             continue
-        digest.append({**p, 'url': 'https://www.reddit.com' + p['path'], **thread(page)})
+        digest.append({**p, 'url': 'https://www.reddit.com' + p['path'], **read_thread(page)})
         seen.add(p['id'])
 
     today = dt.date.today().isoformat()
     out_dir = os.path.join(args.cache, 'scans')
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, f'{today}.json')
-    json.dump({'date': today, 'requests': f.requests, 'stopped': f.stopped, 'listed': len(found), 'posts': digest}, open(out, 'w'), indent=1)
+    json.dump({'date': today, 'source': args.source, 'requests': f.requests, 'stopped': f.stopped, 'listed': len(found), 'posts': digest}, open(out, 'w'), indent=1)
     if not args.offline:
         state = {'seen': sorted(seen)[-2000:], 'lastScan': today}
         json.dump(state, open(state_path, 'w'), indent=1)
