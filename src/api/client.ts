@@ -32,9 +32,28 @@ const PAGE_SIZE = 100;
 export const INVENTORY_TYPES = ['GEAR', 'ISOITEM', 'SHARD', 'RS', 'COSTUME', 'CONSUMABLE', 'ABILITY_MATERIAL'];
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(
+    readonly status: number,
+    message: string,
+    /** The API's error subcode, e.g. PROHIBITED_VALUE. */
+    readonly subcode?: string,
+    /** The parameter or path part the API rejected, when it says. */
+    readonly field?: string,
+  ) {
     super(message);
   }
+}
+
+/** Reads the API's error body ({ error: { subcode, message, field } }) into an ApiError. */
+async function apiError(res: Response, path: string): Promise<ApiError> {
+  let err: { subcode?: string; message?: string; field?: string } | undefined;
+  try {
+    err = ((await res.json()) as { error?: typeof err })?.error;
+  } catch {
+    // No JSON body.
+  }
+  const detail = [err?.subcode, err?.message, err?.field && `field: ${err.field}`].filter(Boolean).join(', ');
+  return new ApiError(res.status, `${path} failed (${res.status}${detail ? `: ${detail}` : ''})`, err?.subcode, err?.field);
 }
 
 /** At most this many requests in flight; bursts beyond it get throttled by the API. */
@@ -81,7 +100,7 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
 
   const res = await paced(() => fetch(url, { headers }));
   if (res.status === 401) logout();
-  if (!res.ok) throw new ApiError(res.status, `${path} failed (${res.status})`);
+  if (!res.ok) throw await apiError(res, path);
   return (await res.json()) as ApiResponse<T>;
 }
 
@@ -325,12 +344,30 @@ export const msfApi = {
       nodeCombat: 'none',
     })).data;
   },
-  /** One room with its enemy waves, including each enemy's name and portrait. */
+  /**
+   * One room with its enemy waves, including each enemy's name and portrait. If the API refuses
+   * the combat inline (422 prohibited value, or 472 too large), reads the room without it and
+   * then the combat by its id from /nodeCombats.
+   */
   async darkDimensionRoom(ddId: string, roomId: string): Promise<NodeInfo> {
-    const { data, meta } = await get<NodeInfo>(`/game/v1/dds/${encodeURIComponent(ddId)}/${encodeURIComponent(roomId)}`, {
-      itemFormat: 'id', traitFormat: 'id', nodeInfo: 'full', nodeReqs: 'full', nodeRewards: 'none',
-      nodeCombat: 'full', charInfo: 'full',
-    });
+    const path = `/game/v1/dds/${encodeURIComponent(ddId)}/${encodeURIComponent(roomId)}`;
+    const base = { itemFormat: 'id', traitFormat: 'id', nodeInfo: 'full', nodeReqs: 'full', nodeRewards: 'none' };
+    let res: ApiResponse<NodeInfo>;
+    try {
+      res = await get<NodeInfo>(path, { ...base, nodeCombat: 'full', charInfo: 'full' });
+    } catch (e) {
+      if (!(e instanceof ApiError) || (e.status !== 422 && e.status !== 472)) throw e;
+      res = await get<NodeInfo>(path, { ...base, nodeCombat: 'none' });
+      if (res.data.combatId) {
+        const combat = await get<NodeInfo['combat']>(`/game/v1/nodeCombats/${encodeURIComponent(res.data.combatId)}`, {
+          itemFormat: 'id', traitFormat: 'id', charInfo: 'full',
+        }).catch(() => get<NodeInfo['combat']>(`/game/v1/nodeCombats/${encodeURIComponent(res.data.combatId!)}`, {
+          itemFormat: 'id', traitFormat: 'id', charInfo: 'none',
+        }));
+        res = { ...res, data: { ...res.data, combat: combat.data }, meta: res.meta ?? combat.meta };
+      }
+    }
+    const { data, meta } = res;
     for (const side of [data.combat?.left, data.combat?.right]) {
       for (const wave of side?.waves ?? []) {
         for (const unit of (wave.units ?? []).flat()) {
