@@ -40,13 +40,17 @@ export default function Explore({ live }: { live: boolean }) {
     } catch (e) {
       setResult(null);
       const tooBig = e instanceof ApiError && e.status === 472;
+      const prohibited = e instanceof ApiError && e.status === 422;
       setError(
         (e instanceof ApiError ? `HTTP ${e.status}: ${e.message}` : String(e)) +
           (tooBig
             ? Object.entries(smallestParams(doc)).every(([k, v]) => sent[k] === v)
               ? '. Still too large with the smallest settings. Try adding ?flexFields=a,b to the path to ask for only some fields.'
               : '. The response is too large: try “Smallest response”, or narrow it with the parameters below.'
-            : ''),
+            : prohibited
+              ? `. The API refused ${e.field ? `“${e.field}”` : 'a value'} here. Check the IDs in the path come from a list call` +
+                ' (Dark Dimension IDs look like dd_id_insanity_event_card_info_limbo), and drop optional parameters one at a time.'
+              : ''),
       );
     }
     setLoading(false);
