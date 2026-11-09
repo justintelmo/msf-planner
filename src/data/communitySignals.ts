@@ -47,7 +47,7 @@ export interface CommunitySignal {
 }
 
 /** When the signals were last checked against Reddit. */
-export const SIGNALS_CHECKED = '2026-10-19';
+export const SIGNALS_CHECKED = '2026-11-09';
 
 const R = 'https://www.reddit.com/r/MarvelStrikeForce/comments/';
 
